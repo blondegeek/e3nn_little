@@ -54,7 +54,7 @@ def execute(args):
             mse.mean().backward()
             optim.step()
 
-            if time.perf_counter() - wall_print > 3:
+            if time.perf_counter() - wall_print > 15:
                 wall_print = time.perf_counter()
                 print(f'[{epoch}] [wall={time.perf_counter() - wall:.0f} step={step}/{len(loader)} mae={units * torch.cat(maes)[-200:].mean():.5f}]', flush=True)
 
