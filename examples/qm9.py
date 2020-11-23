@@ -56,7 +56,7 @@ def execute(args):
 
             if time.perf_counter() - wall_print > 3:
                 wall_print = time.perf_counter()
-                print(f'[{epoch}] [wall={time.perf_counter() - wall:.0f} mae={units * torch.cat(maes)[-200:].mean():.5f}]')
+                print(f'[{epoch}] [wall={time.perf_counter() - wall:.0f} mae={units * torch.cat(maes)[-200:].mean():.5f}]', flush=True)
 
         train_mae = torch.cat(maes)
 
