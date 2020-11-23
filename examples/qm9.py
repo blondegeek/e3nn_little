@@ -41,7 +41,7 @@ def execute(args):
 
         maes = []
         loader = DataLoader(train_dataset, batch_size=args.bs, shuffle=True)
-        for data in loader:
+        for step, data in enumerate(loader):
             data = data.to(device)
             pred = model(data.z, data.pos, data.batch)
 
@@ -56,7 +56,7 @@ def execute(args):
 
             if time.perf_counter() - wall_print > 3:
                 wall_print = time.perf_counter()
-                print(f'[{epoch}] [wall={time.perf_counter() - wall:.0f} mae={units * torch.cat(maes)[-200:].mean():.5f}]', flush=True)
+                print(f'[{epoch}] [wall={time.perf_counter() - wall:.0f} step={step}/{len(loader)} mae={units * torch.cat(maes)[-200:].mean():.5f}]', flush=True)
 
         train_mae = torch.cat(maes)
 
