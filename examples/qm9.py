@@ -40,7 +40,7 @@ def execute(args):
     for epoch in range(10):
 
         maes = []
-        loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+        loader = DataLoader(train_dataset, batch_size=args.bs, shuffle=True)
         for data in loader:
             data = data.to(device)
             pred = model(data.z, data.pos, data.batch)
@@ -99,6 +99,7 @@ def main():
     parser.add_argument("--rad_layers", type=int, default=2)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--lr_decay", type=float, default=0.9)
+    parser.add_argument("--bs", type=int, default=64)
     parser.add_argument("--num_epochs", type=int, default=9)
 
     args = parser.parse_args()
