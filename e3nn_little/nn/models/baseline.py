@@ -76,7 +76,7 @@ class Network(torch.nn.Module):
         self.layers = torch.nn.ModuleList(modules)
 
         Rs_out = [(1, 0, 1)]
-        self.layers.append(Conv(Rs, Rs_out, Rs_sh, RadialModel))
+        self.layers.append(Conv(Rs, Rs_out, self.Rs_sh, RadialModel))
 
         self.register_buffer('initial_atomref', atomref)
         self.atomref = None
