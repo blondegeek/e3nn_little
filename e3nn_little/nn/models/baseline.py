@@ -31,7 +31,7 @@ qm9_target_dict = {
 
 class Network(torch.nn.Module):
     def __init__(self, mul=10, lmax=1,
-                 num_layers=2, num_gaussians=3, cutoff=10.0,
+                 num_layers=2, cutoff=10.0, rad_gaussians=3,
                  rad_h=200, rad_layers=2, num_neighbors=20,
                  readout='add', dipole=False, mean=None, std=None, scale=None,
                  atomref=None):
@@ -55,7 +55,7 @@ class Network(torch.nn.Module):
         RadialModel = partial(
             GaussianRadialModel,
             max_radius=cutoff,
-            number_of_basis=num_gaussians,
+            number_of_basis=rad_gaussians,
             h=rad_h,
             L=rad_layers,
             act=swish
