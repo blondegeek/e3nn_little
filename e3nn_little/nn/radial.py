@@ -67,7 +67,7 @@ class FC(torch.nn.Module):
             if self.L == 0:
                 W = self.weights[0]
                 h = x.size(1)
-                return x @ (W.t() / h ** 0.5)
+                return x @ W.t()
 
             for i, W in enumerate(self.weights):
                 h = x.size(1)
