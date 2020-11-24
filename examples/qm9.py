@@ -37,7 +37,7 @@ def execute(args):
     wall = time.perf_counter()
     wall_print = time.perf_counter()
 
-    for epoch in range(10):
+    for epoch in range(args.num_epochs):
 
         maes = []
         loader = DataLoader(train_dataset, batch_size=args.bs, shuffle=True)
@@ -74,8 +74,8 @@ def execute(args):
         dynamics += [{
             'epoch': epoch,
             'wall': time.perf_counter() - wall,
-            'train_mae': train_mae,
-            'val_mae': val_mae,
+            'train_mae': units * train_mae,
+            'val_mae': units * val_mae,
         }]
 
         print(f'[{epoch}] Target: {target:02d}, MAE TRAIN: {units * train_mae.mean():.5f} ± {units * train_mae.std():.5f}, MAE VAL: {units * val_mae.mean():.5f} ± {units * val_mae.std():.5f}', flush=True)
