@@ -5,6 +5,7 @@ import subprocess
 import time
 
 import torch
+from torch.autograd import profiler
 from torch_geometric.data import DataLoader
 from torch_geometric.datasets import QM9
 from torch_geometric.nn import SchNet
@@ -45,16 +46,23 @@ def execute(args):
         loader = DataLoader(train_dataset, batch_size=args.bs, shuffle=True)
         for step, data in enumerate(loader):
             data = data.to(device)
-            pred = model(data.z, data.pos, data.batch)
+            optim.zero_grad()
 
-            mse = (pred.view(-1) - data.y[:, target]).pow(2)
+            if step == 2:
+                with profiler.profile(record_shapes=True) as prof:
+                    pred = model(data.z, data.pos, data.batch)
+                    mse = (pred.view(-1) - data.y[:, target]).pow(2)
+                    mse.mean().backward()
+                print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10), flush=True)
+                prof.export_chrome_trace("trace.json")
+            else:
+                pred = model(data.z, data.pos, data.batch)
+                mse = (pred.view(-1) - data.y[:, target]).pow(2)
+                mse.mean().backward()
 
+            optim.step()
             mae = (pred.view(-1) - data.y[:, target]).abs()
             maes += [mae.cpu().detach()]
-
-            optim.zero_grad()
-            mse.mean().backward()
-            optim.step()
 
             if time.perf_counter() - wall_print > 15:
                 wall_print = time.perf_counter()
