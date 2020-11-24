@@ -10,7 +10,8 @@ from torch_scatter import scatter
 
 from e3nn_little import o3
 from e3nn_little.nn import (GatedBlockParity, GaussianRadialModel,
-                            WeightedTensorProduct, Linear, swish)
+                            WeightedTensorProduct, Linear)
+from e3nn_little.util import swish
 
 
 qm9_target_dict = {
