@@ -34,7 +34,7 @@ class Network(torch.nn.Module):
                  num_layers=2, cutoff=10.0, rad_gaussians=3,
                  rad_h=200, rad_layers=2, num_neighbors=20,
                  readout='add', dipole=False, mean=None, std=None, scale=None,
-                 atomref=None):
+                 atomref=None, options=""):
         super(Network, self).__init__()
 
         assert readout in ['add', 'sum', 'mean']
@@ -46,6 +46,7 @@ class Network(torch.nn.Module):
         self.std = std
         self.scale = scale
         self.num_neighbors = num_neighbors
+        self.options = options
 
         atomic_mass = torch.from_numpy(ase.data.atomic_masses)
         self.register_buffer('atomic_mass', atomic_mass)
@@ -68,10 +69,12 @@ class Network(torch.nn.Module):
         for _ in range(num_layers):
             act = GatedBlockParity.make_gated_block(Rs, mul, lmax)
             lay = Conv(Rs, act.Rs_in, self.Rs_sh, RadialModel)
+            extra = Linear(act.Rs_out, act.Rs_out) if 'extra' in self.options else None
+            shortcut = Linear(Rs, act.Rs_out) if 'res' in self.options else None
 
             Rs = act.Rs_out
 
-            modules += [torch.nn.ModuleList([lay, act])]
+            modules += [torch.nn.ModuleList([lay, act, extra, shortcut])]
 
         self.layers = torch.nn.ModuleList(modules)
 
@@ -95,9 +98,19 @@ class Network(torch.nn.Module):
         edge_vec = pos[row] - pos[col]
         sh = o3.spherical_harmonics(self.Rs_sh, edge_vec, 'component') / self.num_neighbors**0.5
 
-        for lay, act in self.layers[:-1]:
-            h = lay(h, edge_index, edge_vec, sh)
-            h = act(h)
+        for lay, act, extra, shortcut in self.layers[:-1]:
+            if shortcut:
+                s = shortcut(h)
+
+            h = lay(h, edge_index, edge_vec, sh)  # convolution
+            h = act(h)  # gate non linearity
+
+            if extra:
+                h = extra(h)  # optional extra linear layer
+
+            if shortcut:
+                m = shortcut.output_mask
+                h = 0.5**0.5 * s + (1 * (1-m) + 0.5**0.5 * m) * h
 
         h = self.layers[-1](h, edge_index, edge_vec, sh)
 

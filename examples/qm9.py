@@ -1,6 +1,7 @@
 # pylint: disable=not-callable, no-member, invalid-name, line-too-long, wildcard-import, unused-wildcard-import, missing-docstring, bare-except, abstract-method, arguments-differ
 import argparse
 import pickle
+import subprocess
 import time
 
 import torch
@@ -26,7 +27,8 @@ def execute(args):
     model = Network(
         mul=args.mul, lmax=args.lmax, num_layers=args.num_layers, rad_gaussians=args.rad_gaussians,
         rad_h=args.rad_h, rad_layers=args.rad_layers,
-        mean=0, std=1, atomref=dataset.atomref(7)
+        mean=0, std=1, atomref=dataset.atomref(target),
+        options=args.arch
     )
     model = model.to(device)
 
@@ -89,6 +91,11 @@ def execute(args):
 
 
 def main():
+    git = {
+        'log': subprocess.getoutput('git log --format="%H" -n 1 -z'),
+        'status': subprocess.getoutput('git status -z'),
+    }
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=str, required=True)
     parser.add_argument("--mul", type=int, default=5)
@@ -101,6 +108,7 @@ def main():
     parser.add_argument("--lr_decay", type=float, default=0.9)
     parser.add_argument("--bs", type=int, default=64)
     parser.add_argument("--num_epochs", type=int, default=9)
+    parser.add_argument("--arch", type=str, default="")
 
     args = parser.parse_args()
 
@@ -108,6 +116,7 @@ def main():
         pickle.dump(args, handle)
 
     for data in execute(args):
+        data['git'] = git
         with open(args.output, 'wb') as handle:
             pickle.dump(args, handle)
             pickle.dump(data, handle)
