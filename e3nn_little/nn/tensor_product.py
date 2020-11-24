@@ -102,7 +102,7 @@ class Linear(torch.nn.Module):
         self.register_buffer('output_mask', output_mask)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({o3.format_Rs(self.Rs_in)} -> {o3.format_Rs(self.Rs_out)} {self.tp.nweight} paths)"
+        return f"{self.__class__.__name__}({o3.format_Rs(self.Rs_in)} -> {o3.format_Rs(self.Rs_out)} {self.tp.nweight} weights)"
 
     def forward(self, features):
         """
@@ -375,7 +375,7 @@ CODE
         self.to(dtype=torch.get_default_dtype())
 
     def __repr__(self):
-        return "{name}({Rs_in1} x {Rs_in2} -> {Rs_out} {nw} paths)".format(
+        return "{name}({Rs_in1} x {Rs_in2} -> {Rs_out} {nw} weights)".format(
             name=self.__class__.__name__,
             Rs_in1=o3.format_Rs(o3.simplify(self.Rs_in1)),
             Rs_in2=o3.format_Rs(o3.simplify(self.Rs_in2)),

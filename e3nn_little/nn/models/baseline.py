@@ -69,11 +69,11 @@ class Network(torch.nn.Module):
         Rs = [(mul, 0, 1)]
         for _ in range(num_layers):
             act = GatedBlockParity.make_gated_block(Rs, mul, lmax)
-            lay = Conv(Rs, act.Rs_in, self.Rs_sh, RadialModel)
+            lay = Conv(Rs, act.Rs_in, self.Rs_sh, RadialModel, groups=1 if '1group' in self.options else math.inf)
             extra = Linear(act.Rs_out, act.Rs_out) if 'extra' in self.options else None
             shortcut = Linear(Rs, act.Rs_out) if 'res' in self.options else None
 
-            Rs = act.Rs_out
+            Rs = o3.simplify(act.Rs_out)
 
             modules += [torch.nn.ModuleList([lay, act, extra, shortcut])]
 
@@ -150,7 +150,7 @@ class Conv(MessagePassing):
         self.lin1 = Linear(Rs_in, Rs_out)
         self.tp = GroupedWeightedTensorProduct(Rs_in, Rs_sh, Rs_out, groups=groups, normalization=normalization, own_weight=False)
         self.rm = RadialModel(self.tp.nweight)
-        self.lin2 = Linear(Rs_out, Rs_out)
+        self.lin2 = Linear(Rs_out, Rs_out) if groups > 1 else None
         self.Rs_sh = Rs_sh
         self.normalization = normalization
 
@@ -161,7 +161,8 @@ class Conv(MessagePassing):
 
             w = self.rm(edge_vec.norm(dim=1))  # [num_messages, nweight]
             x = self.propagate(edge_index, size=size, x=x, sh=sh, w=w)
-            x = self.lin2(x)
+            if self.lin2:
+                x = self.lin2(x)
 
             si = self.lin1.output_mask
             return 0.5**0.5 * self_interation + (1 + (0.5**0.5 - 1) * si) * x

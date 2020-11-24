@@ -88,8 +88,8 @@ class GatedBlockParity(torch.nn.Module):
     def __init__(self, Rs_scalars, act_scalars, Rs_gates, act_gates, Rs_nonscalars):
         super().__init__()
 
-        self.Rs_in = Rs_scalars + Rs_gates + Rs_nonscalars
-        self.Rs_scalars, self.Rs_gates, self.Rs_nonscalars = Rs_scalars, Rs_gates, Rs_nonscalars
+        self.Rs_in = o3.simplify(Rs_scalars + Rs_gates + Rs_nonscalars)
+        self.Rs_scalars, self.Rs_gates, self.Rs_nonscalars = o3.simplify(Rs_scalars), o3.simplify(Rs_gates), o3.simplify(Rs_nonscalars)
 
         self.act_scalars = Activation(Rs_scalars, act_scalars)
         Rs_scalars = self.act_scalars.Rs_out
