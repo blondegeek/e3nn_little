@@ -26,7 +26,7 @@ def execute(args):
     train_dataset, val_dataset, _test_dataset = datasets
 
     model = Network(
-        mul=args.mul, lmax=args.lmax, num_layers=args.num_layers, rad_gaussians=args.rad_gaussians,
+        muls=(args.mul0, args.mul1, args.mul2), lmax=args.lmax, num_layers=args.num_layers, rad_gaussians=args.rad_gaussians,
         rad_h=args.rad_h, rad_layers=args.rad_layers,
         mean=0, std=1, atomref=dataset.atomref(target),
         options=args.arch
@@ -110,7 +110,9 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=str, required=True)
-    parser.add_argument("--mul", type=int, default=30)
+    parser.add_argument("--mul0", type=int, default=30)
+    parser.add_argument("--mul1", type=int, default=10)
+    parser.add_argument("--mul2", type=int, default=0)
     parser.add_argument("--lmax", type=int, default=1)
     parser.add_argument("--num_layers", type=int, default=1)
     parser.add_argument("--rad_gaussians", type=int, default=40)

@@ -3,7 +3,7 @@ import torch
 from torch.autograd import profiler
 
 from e3nn_little import o3, nn
-from e3nn_little.util import normalize2mom, swish
+from e3nn_little.util import normalize2mom
 
 
 class Activation(torch.nn.Module):
@@ -103,31 +103,6 @@ class GatedBlockParity(torch.nn.Module):
         Rs_nonscalars = self.mul.Rs_out
 
         self.Rs_out = Rs_scalars + Rs_nonscalars
-
-    @staticmethod
-    def make_gated_block(Rs_in, mul, lmax):
-        """
-        Make a `GatedBlockParity` assuming many things
-        """
-        Rs_guess = [
-            (l, p_in * p_sh)
-            for _, l_in, p_in in o3.simplify(Rs_in)
-            for l_sh, p_sh in [(l, (-1)**l) for l in range(lmax + 1)]
-            for l in range(abs(l_in - l_sh), min(l_in + l_sh, lmax) + 1)
-        ]
-
-        scalars = [(mul, l, p) for mul, l, p in [(mul, 0, +1), (mul, 0, -1)] if (l, p) in Rs_guess]
-        act_scalars = [(mul, swish if p == 1 else torch.tanh) for mul, l, p in scalars]
-
-        nonscalars = [(mul, l, p) for l in range(1, lmax + 1) for p in [+1, -1] if (l, p) in Rs_guess]
-        if (0, +1) in Rs_guess:
-            gates = [(o3.mul_dim(nonscalars), 0, +1)]
-            act_gates = [(-1, torch.sigmoid)]
-        else:
-            gates = [(o3.mul_dim(nonscalars), 0, -1)]
-            act_gates = [(-1, torch.tanh)]
-
-        return GatedBlockParity(scalars, act_scalars, gates, act_gates, nonscalars)
 
     def __repr__(self):
         return "{name} ({Rs_scalars} + {Rs_gates} + {Rs_nonscalars} -> {Rs_out})".format(
