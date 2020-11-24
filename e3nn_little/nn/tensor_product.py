@@ -3,6 +3,7 @@ import math
 from typing import List, Tuple
 
 import torch
+from torch.autograd import profiler
 from e3nn_little import o3
 from e3nn_little.util import eval_code
 
@@ -101,12 +102,7 @@ class Linear(torch.nn.Module):
         self.register_buffer('output_mask', output_mask)
 
     def __repr__(self):
-        return "{name} ({Rs_in1} -> {Rs_out} using {nw} paths)".format(
-            name=self.__class__.__name__,
-            Rs_in1=o3.format_Rs(self.tp.Rs_in1),
-            Rs_out=o3.format_Rs(self.tp.Rs_out),
-            nw=self.tp.nweight,
-        )
+        return f"{self.__class__.__name__}({o3.format_Rs(self.Rs_in)} -> {o3.format_Rs(self.Rs_out)} {self.tp.nweight} paths)"
 
     def forward(self, features):
         """
@@ -379,11 +375,11 @@ CODE
         self.to(dtype=torch.get_default_dtype())
 
     def __repr__(self):
-        return "{name} ({Rs_in1} x {Rs_in2} -> {Rs_out} using {nw} paths)".format(
+        return "{name}({Rs_in1} x {Rs_in2} -> {Rs_out} {nw} paths)".format(
             name=self.__class__.__name__,
-            Rs_in1=o3.format_Rs(self.Rs_in1),
-            Rs_in2=o3.format_Rs(self.Rs_in2),
-            Rs_out=o3.format_Rs(self.Rs_out),
+            Rs_in1=o3.format_Rs(o3.simplify(self.Rs_in1)),
+            Rs_in2=o3.format_Rs(o3.simplify(self.Rs_in2)),
+            Rs_out=o3.format_Rs(o3.simplify(self.Rs_out)),
             nw=self.nweight,
         )
 
@@ -391,29 +387,30 @@ CODE
         """
         :return:         tensor [..., channel]
         """
-        *size, n = features_1.size()
-        features_1 = features_1.reshape(-1, n)
-        assert n == o3.dim(self.Rs_in1), f"{n} is not {o3.dim(self.Rs_in1)}"
-        *size2, n = features_2.size()
-        features_2 = features_2.reshape(-1, n)
-        assert n == o3.dim(self.Rs_in2), f"{n} is not {o3.dim(self.Rs_in2)}"
-        assert size == size2
+        with profiler.record_function(repr(self)):
+            *size, n = features_1.size()
+            features_1 = features_1.reshape(-1, n)
+            assert n == o3.dim(self.Rs_in1), f"{n} is not {o3.dim(self.Rs_in1)}"
+            *size2, n = features_2.size()
+            features_2 = features_2.reshape(-1, n)
+            assert n == o3.dim(self.Rs_in2), f"{n} is not {o3.dim(self.Rs_in2)}"
+            assert size == size2
 
-        if self.nweight:
-            if weight is None:
-                weight = self.weight
-            weight = weight.reshape(-1, self.nweight)
-            if weight.shape[0] == 1:
-                weight = weight.repeat(features_1.shape[0], 1)
+            if self.nweight:
+                if weight is None:
+                    weight = self.weight
+                weight = weight.reshape(-1, self.nweight)
+                if weight.shape[0] == 1:
+                    weight = weight.repeat(features_1.shape[0], 1)
 
-        wigners = [getattr(self, arg) for arg in self.wigners_names]
+            wigners = [getattr(self, arg) for arg in self.wigners_names]
 
-        if features_1.shape[0] == 0:
-            return torch.zeros(*size, o3.dim(self.Rs_out))
+            if features_1.shape[0] == 0:
+                return torch.zeros(*size, o3.dim(self.Rs_out))
 
-        if self.nweight:
-            features = self.main(*wigners, features_1, features_2, weight)
-        else:
-            features = self.main(*wigners, features_1, features_2)
+            if self.nweight:
+                features = self.main(*wigners, features_1, features_2, weight)
+            else:
+                features = self.main(*wigners, features_1, features_2)
 
-        return features.reshape(*size, -1)
+            return features.reshape(*size, -1)

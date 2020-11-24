@@ -4,6 +4,7 @@ from functools import partial
 
 import ase
 import torch
+from torch.autograd import profiler
 from torch.nn import Embedding
 from torch_geometric.nn import MessagePassing, radius_graph
 from torch_scatter import scatter
@@ -88,54 +89,56 @@ class Network(torch.nn.Module):
             self.atomref.weight.data.copy_(atomref)
 
     def forward(self, z, pos, batch=None):
-        assert z.dim() == 1 and z.dtype == torch.long
-        batch = torch.zeros_like(z) if batch is None else batch
+        with profiler.record_function("Network:prep"):
+            assert z.dim() == 1 and z.dtype == torch.long
+            batch = torch.zeros_like(z) if batch is None else batch
 
-        h = self.embedding(z)
+            h = self.embedding(z)
 
-        edge_index = radius_graph(pos, r=self.cutoff, batch=batch)
-        row, col = edge_index
-        edge_vec = pos[row] - pos[col]
-        sh = o3.spherical_harmonics(self.Rs_sh, edge_vec, 'component') / self.num_neighbors**0.5
+            edge_index = radius_graph(pos, r=self.cutoff, batch=batch)
+            row, col = edge_index
+            edge_vec = pos[row] - pos[col]
+            sh = o3.spherical_harmonics(self.Rs_sh, edge_vec, 'component') / self.num_neighbors**0.5
 
-        for lay, act, extra, shortcut in self.layers[:-1]:
-            if shortcut:
-                s = shortcut(h)
+        with profiler.record_function("Network:main"):
+            for lay, act, extra, shortcut in self.layers[:-1]:
+                if shortcut:
+                    s = shortcut(h)
 
-            h = lay(h, edge_index, edge_vec, sh)  # convolution
-            h = act(h)  # gate non linearity
+                h = lay(h, edge_index, edge_vec, sh)  # convolution
+                h = act(h)  # gate non linearity
 
-            if extra:
-                h = extra(h)  # optional extra linear layer
+                if extra:
+                    h = extra(h)  # optional extra linear layer
 
-            if shortcut:
-                m = shortcut.output_mask
-                h = 0.5**0.5 * s + (1 * (1-m) + 0.5**0.5 * m) * h
+                if shortcut:
+                    m = shortcut.output_mask
+                    h = 0.5**0.5 * s + (1 * (1-m) + 0.5**0.5 * m) * h
 
-        h = self.layers[-1](h, edge_index, edge_vec, sh)
+            h = self.layers[-1](h, edge_index, edge_vec, sh)
 
+        with profiler.record_function("Network:finalize"):
+            if self.dipole:
+                # Get center of mass.
+                mass = self.atomic_mass[z].view(-1, 1)
+                c = scatter(mass * pos, batch, dim=0) / scatter(mass, batch, dim=0)
+                h = h * (pos - c[batch])
 
-        if self.dipole:
-            # Get center of mass.
-            mass = self.atomic_mass[z].view(-1, 1)
-            c = scatter(mass * pos, batch, dim=0) / scatter(mass, batch, dim=0)
-            h = h * (pos - c[batch])
+            if not self.dipole and self.mean is not None and self.std is not None:
+                h = h * self.std + self.mean
 
-        if not self.dipole and self.mean is not None and self.std is not None:
-            h = h * self.std + self.mean
+            if not self.dipole and self.atomref is not None:
+                h = h + self.atomref(z)
 
-        if not self.dipole and self.atomref is not None:
-            h = h + self.atomref(z)
+            out = scatter(h, batch, dim=0, reduce=self.readout)
 
-        out = scatter(h, batch, dim=0, reduce=self.readout)
+            if self.dipole:
+                out = torch.norm(out, dim=-1, keepdim=True)
 
-        if self.dipole:
-            out = torch.norm(out, dim=-1, keepdim=True)
+            if self.scale is not None:
+                out = self.scale * out
 
-        if self.scale is not None:
-            out = self.scale * out
-
-        return out
+            return out
 
 
 class Conv(MessagePassing):
@@ -152,15 +155,16 @@ class Conv(MessagePassing):
         self.normalization = normalization
 
     def forward(self, x, edge_index, edge_vec, sh, size=None):
-        # x = [num_atoms, dim(Rs_in)]
-        self_interation = self.lin1(x)
+        with profiler.record_function("Conv"):
+            # x = [num_atoms, dim(Rs_in)]
+            self_interation = self.lin1(x)
 
-        w = self.rm(edge_vec.norm(dim=1))  # [num_messages, nweight]
-        x = self.propagate(edge_index, size=size, x=x, sh=sh, w=w)
-        x = self.lin2(x)
+            w = self.rm(edge_vec.norm(dim=1))  # [num_messages, nweight]
+            x = self.propagate(edge_index, size=size, x=x, sh=sh, w=w)
+            x = self.lin2(x)
 
-        si = self.lin1.output_mask
-        return 0.5**0.5 * self_interation + (1 + (0.5**0.5 - 1) * si) * x
+            si = self.lin1.output_mask
+            return 0.5**0.5 * self_interation + (1 + (0.5**0.5 - 1) * si) * x
 
     def message(self, x_j, sh, w):
         return self.tp(x_j, sh, w)
