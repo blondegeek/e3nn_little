@@ -33,6 +33,18 @@ def execute(args):
     )
     model = model.to(device)
 
+    # profile
+    loader = DataLoader(train_dataset, batch_size=args.bs, shuffle=False)
+    for step, data in enumerate(loader):
+        with profiler.profile(record_shapes=True) as prof:
+            pred = model(data.z, data.pos, data.batch)
+            mse = (pred.view(-1) - data.y[:, target]).pow(2)
+            mse.mean().backward()
+        print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10), flush=True)
+        prof.export_chrome_trace("trace.json")
+        if step == 2:
+            break
+
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.MultiplicativeLR(optim, lambda epoch: args.lr_decay)
 
@@ -46,21 +58,13 @@ def execute(args):
         loader = DataLoader(train_dataset, batch_size=args.bs, shuffle=True)
         for step, data in enumerate(loader):
             data = data.to(device)
+
+            pred = model(data.z, data.pos, data.batch)
+            mse = (pred.view(-1) - data.y[:, target]).pow(2)
             optim.zero_grad()
-
-            if step == 2:
-                with profiler.profile(record_shapes=True) as prof:
-                    pred = model(data.z, data.pos, data.batch)
-                    mse = (pred.view(-1) - data.y[:, target]).pow(2)
-                    mse.mean().backward()
-                print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10), flush=True)
-                prof.export_chrome_trace("trace.json")
-            else:
-                pred = model(data.z, data.pos, data.batch)
-                mse = (pred.view(-1) - data.y[:, target]).pow(2)
-                mse.mean().backward()
-
+            mse.mean().backward()
             optim.step()
+
             mae = (pred.view(-1) - data.y[:, target]).abs()
             maes += [mae.cpu().detach()]
 
