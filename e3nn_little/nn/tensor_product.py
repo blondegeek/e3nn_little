@@ -9,9 +9,9 @@ from e3nn_little.util import eval_code
 
 
 def WeightedTensorProduct(Rs_in1, Rs_in2, Rs_out, normalization='component', own_weight=True):
-    Rs_in1 = o3.convention(Rs_in1)
-    Rs_in2 = o3.convention(Rs_in2)
-    Rs_out = o3.convention(Rs_out)
+    Rs_in1 = o3.simplify(Rs_in1)
+    Rs_in2 = o3.simplify(Rs_in2)
+    Rs_out = o3.simplify(Rs_out)
 
     instr = [
         (i_1, i_2, i_out, 'uvw')

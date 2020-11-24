@@ -1,5 +1,4 @@
 # pylint: disable=not-callable, no-member, invalid-name, line-too-long, wildcard-import, unused-wildcard-import, missing-docstring, bare-except, abstract-method, arguments-differ
-import math
 from functools import partial
 
 import ase
@@ -11,7 +10,7 @@ from torch_scatter import scatter
 
 from e3nn_little import o3
 from e3nn_little.nn import (GatedBlockParity, GaussianRadialModel,
-                            GroupedWeightedTensorProduct, Linear, swish)
+                            WeightedTensorProduct, Linear, swish)
 
 
 qm9_target_dict = {
@@ -69,7 +68,7 @@ class Network(torch.nn.Module):
         Rs = [(mul, 0, 1)]
         for _ in range(num_layers):
             act = GatedBlockParity.make_gated_block(Rs, mul, lmax)
-            lay = Conv(Rs, act.Rs_in, self.Rs_sh, RadialModel, groups=1 if '1group' in self.options else math.inf)
+            lay = Conv(Rs, act.Rs_in, self.Rs_sh, RadialModel)
             extra = Linear(act.Rs_out, act.Rs_out) if 'extra' in self.options else None
             shortcut = Linear(Rs, act.Rs_out) if 'res' in self.options else None
 
@@ -142,30 +141,28 @@ class Network(torch.nn.Module):
 
 
 class Conv(MessagePassing):
-    def __init__(self, Rs_in, Rs_out, Rs_sh, RadialModel, groups=math.inf, normalization='component'):
+    def __init__(self, Rs_in, Rs_out, Rs_sh, RadialModel, normalization='component'):
         super().__init__(aggr='add')
         self.Rs_in = o3.simplify(Rs_in)
         self.Rs_out = o3.simplify(Rs_out)
 
-        self.lin1 = Linear(Rs_in, Rs_out)
-        self.tp = GroupedWeightedTensorProduct(Rs_in, Rs_sh, Rs_out, groups=groups, normalization=normalization, own_weight=False)
+        self.si = Linear(Rs_in, Rs_out)
+        self.tp = WeightedTensorProduct(Rs_in, Rs_sh, Rs_out, normalization=normalization, own_weight=False)
         self.rm = RadialModel(self.tp.nweight)
-        self.lin2 = Linear(Rs_out, Rs_out) if groups > 1 else None
+
         self.Rs_sh = Rs_sh
         self.normalization = normalization
 
     def forward(self, x, edge_index, edge_vec, sh, size=None):
         with profiler.record_function("Conv"):
             # x = [num_atoms, dim(Rs_in)]
-            self_interation = self.lin1(x)
+            s = self.si(x)
 
             w = self.rm(edge_vec.norm(dim=1))  # [num_messages, nweight]
             x = self.propagate(edge_index, size=size, x=x, sh=sh, w=w)
-            if self.lin2:
-                x = self.lin2(x)
 
-            si = self.lin1.output_mask
-            return 0.5**0.5 * self_interation + (1 + (0.5**0.5 - 1) * si) * x
+            m = self.si.output_mask
+            return 0.5**0.5 * s + (1 + (0.5**0.5 - 1) * m) * x
 
     def message(self, x_j, sh, w):
         return self.tp(x_j, sh, w)
