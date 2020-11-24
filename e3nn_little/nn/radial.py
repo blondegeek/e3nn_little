@@ -2,6 +2,7 @@
 from functools import partial
 
 import torch
+from torch.autograd import profiler
 
 from e3nn_little.util import normalize2mom
 
@@ -44,6 +45,9 @@ class FC(torch.nn.Module):
     def __init__(self, d1, d2, h, L, act):
         super().__init__()
 
+        self.h = h
+        self.L = L
+
         weights = []
 
         hh = d1
@@ -55,27 +59,29 @@ class FC(torch.nn.Module):
         self.weights = torch.nn.ParameterList(weights)
         self.act = normalize2mom(act)
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}(L={self.L} h={self.h})"
+
     def forward(self, x):
-        L = len(self.weights) - 1
+        with profiler.record_function(repr(self)):
+            if self.L == 0:
+                W = self.weights[0]
+                h = x.size(1)
+                return x @ (W.t() / h ** 0.5)
 
-        if L == 0:
-            W = self.weights[0]
-            h = x.size(1)
-            return x @ (W.t() / h ** 0.5)
+            for i, W in enumerate(self.weights):
+                h = x.size(1)
 
-        for i, W in enumerate(self.weights):
-            h = x.size(1)
+                if i == 0:
+                    # note: normalization assumes that the sum of the inputs is 1
+                    x = self.act(x @ W.t())
+                elif i < self.L:
+                    x = self.act(x @ (W.t() / h ** 0.5))
+                else:
+                    # we aim for a gaussian output at initialisation
+                    x = x @ (W.t() / h ** 0.5)
 
-            if i == 0:
-                # note: normalization assumes that the sum of the inputs is 1
-                x = self.act(x @ W.t())
-            elif i < L:
-                x = self.act(x @ (W.t() / h ** 0.5))
-            else:
-                # we aim for a gaussian output at initialisation
-                x = x @ (W.t() / h ** 0.5)
-
-        return x
+            return x
 
 
 def FiniteElementFCModel(out_dim, position, basis, h, L, act):

@@ -1,5 +1,6 @@
 # pylint: disable=invalid-name, arguments-differ, missing-docstring, line-too-long, no-member, unbalanced-tuple-unpacking, abstract-method
 import torch
+from torch.autograd import profiler
 
 from e3nn_little import o3, nn
 from e3nn_little.util import normalize2mom, swish
@@ -70,18 +71,19 @@ class Activation(torch.nn.Module):
         '''
         :param features: [..., channels, ...]
         '''
-        output = []
-        index = 0
-        for mul, act in self.acts:
-            output.append(act(features.narrow(dim, index, mul)))
-            index += mul
+        with profiler.record_function(repr(self)):
+            output = []
+            index = 0
+            for mul, act in self.acts:
+                output.append(act(features.narrow(dim, index, mul)))
+                index += mul
 
-        if output:
-            return torch.cat(output, dim=dim)
-        else:
-            size = list(features.size())
-            size[dim] = 0
-            return features.new_zeros(*size)
+            if output:
+                return torch.cat(output, dim=dim)
+            else:
+                size = list(features.size())
+                size[dim] = 0
+                return features.new_zeros(*size)
 
 
 class GatedBlockParity(torch.nn.Module):
@@ -137,12 +139,13 @@ class GatedBlockParity(torch.nn.Module):
         )
 
     def forward(self, features, dim=-1):
-        scalars, gates, nonscalars = o3.cut(features, self.Rs_scalars, self.Rs_gates, self.Rs_nonscalars, dim_=dim)
-        scalars = self.act_scalars(scalars)
-        if gates.shape[dim]:
-            gates = self.act_gates(gates)
-            nonscalars = self.mul(nonscalars, gates)
-            features = torch.cat([scalars, nonscalars], dim=dim)
-        else:
-            features = scalars
-        return features
+        with profiler.record_function(repr(self)):
+            scalars, gates, nonscalars = o3.cut(features, self.Rs_scalars, self.Rs_gates, self.Rs_nonscalars, dim_=dim)
+            scalars = self.act_scalars(scalars)
+            if gates.shape[dim]:
+                gates = self.act_gates(gates)
+                nonscalars = self.mul(nonscalars, gates)
+                features = torch.cat([scalars, nonscalars], dim=dim)
+            else:
+                features = scalars
+            return features

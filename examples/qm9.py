@@ -47,7 +47,7 @@ def execute(args):
             break
 
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.MultiplicativeLR(optim, lambda epoch: args.lr_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optim, patience=25, factor=0.8, min_lr=1e-6)
 
     dynamics = []
     wall = time.perf_counter()
@@ -61,9 +61,8 @@ def execute(args):
             data = data.to(device)
 
             pred = model(data.z, data.pos, data.batch)
-            mse = (pred.view(-1) - data.y[:, target]).pow(2)
             optim.zero_grad()
-            mse.mean().backward()
+            (pred.view(-1) - data.y[:, target]).pow(2).mean().backward()
             optim.step()
 
             mae = (pred.view(-1) - data.y[:, target]).abs()
@@ -95,7 +94,7 @@ def execute(args):
 
         print(f'[{epoch}] Target: {target:02d}, MAE TRAIN: {units * train_mae.mean():.5f} ± {units * train_mae.std():.5f}, MAE VAL: {units * val_mae.mean():.5f} ± {units * val_mae.std():.5f}', flush=True)
 
-        scheduler.step()
+        scheduler.step(val_mae.pow(2).mean())
 
         yield {
             'args': args,
@@ -111,16 +110,15 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=str, required=True)
-    parser.add_argument("--mul", type=int, default=10)
+    parser.add_argument("--mul", type=int, default=30)
     parser.add_argument("--lmax", type=int, default=1)
-    parser.add_argument("--num_layers", type=int, default=3)
-    parser.add_argument("--rad_gaussians", type=int, default=50)
-    parser.add_argument("--rad_h", type=int, default=300)
+    parser.add_argument("--num_layers", type=int, default=1)
+    parser.add_argument("--rad_gaussians", type=int, default=40)
+    parser.add_argument("--rad_h", type=int, default=500)
     parser.add_argument("--rad_layers", type=int, default=4)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--lr_decay", type=float, default=0.97)
+    parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--bs", type=int, default=128)
-    parser.add_argument("--num_epochs", type=int, default=10)
+    parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--arch", type=str, default="")
 
     args = parser.parse_args()
