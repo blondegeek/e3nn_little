@@ -27,7 +27,7 @@ def execute(args):
 
     model = Network(
         muls=(args.mul0, args.mul1, args.mul2), lmax=args.lmax, num_layers=args.num_layers, rad_gaussians=args.rad_gaussians,
-        rad_h=args.rad_h, rad_layers=args.rad_layers,
+        rad_hs=(args.rad_h,) * args.rad_layers + (args.rad_bottleneck,),
         mean=0, std=1, atomref=dataset.atomref(target),
         options=args.arch
     )
@@ -116,7 +116,8 @@ def main():
     parser.add_argument("--lmax", type=int, default=1)
     parser.add_argument("--num_layers", type=int, default=1)
     parser.add_argument("--rad_gaussians", type=int, default=40)
-    parser.add_argument("--rad_h", type=int, default=500)
+    parser.add_argument("--rad_h", type=int, default=200)
+    parser.add_argument("--rad_bottleneck", type=int, default=50)
     parser.add_argument("--rad_layers", type=int, default=4)
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--bs", type=int, default=128)

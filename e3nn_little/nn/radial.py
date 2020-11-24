@@ -1,6 +1,4 @@
 # pylint: disable=arguments-differ, no-member, missing-docstring, invalid-name, line-too-long
-from functools import partial
-
 import torch
 from torch.autograd import profiler
 
@@ -42,54 +40,44 @@ class FiniteElementModel(torch.nn.Module):
 
 
 class FC(torch.nn.Module):
-    def __init__(self, d1, d2, h, L, act):
+    def __init__(self, hs, act):
         super().__init__()
-
-        self.h = h
-        self.L = L
-
+        assert isinstance(hs, tuple)
+        self.hs = hs
         weights = []
 
-        hh = d1
-        for _ in range(L):
-            weights.append(torch.nn.Parameter(torch.randn(h, hh)))
-            hh = h
+        for h1, h2 in zip(self.hs, self.hs[1:]):
+            weights.append(torch.nn.Parameter(torch.randn(h1, h2)))
 
-        weights.append(torch.nn.Parameter(torch.randn(d2, hh)))
         self.weights = torch.nn.ParameterList(weights)
         self.act = normalize2mom(act)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(L={self.L} h={self.h})"
+        return f"{self.__class__.__name__}{self.hs}"
 
     def forward(self, x):
         with profiler.record_function(repr(self)):
-            if self.L == 0:
-                W = self.weights[0]
-                h = x.size(1)
-                return x @ W.t()
-
             for i, W in enumerate(self.weights):
-                h = x.size(1)
-
+                # first layer
                 if i == 0:
-                    # note: normalization assumes that the sum of the inputs is 1
-                    x = self.act(x @ W.t())
-                elif i < self.L:
-                    x = self.act(x @ (W.t() / h ** 0.5))
+                    x = x @ W
                 else:
-                    # we aim for a gaussian output at initialisation
-                    x = x @ (W.t() / h ** 0.5)
+                    x = x @ (W / x.shape[1]**0.5)
+
+                # not last layer
+                if i < len(self.weights) - 1:
+                    x = self.act(x)
 
             return x
 
 
-def FiniteElementFCModel(out_dim, position, basis, h, L, act):
-    Model = partial(FC, h=h, L=L, act=act)
+def FiniteElementFCModel(out_dim, position, basis, hs, act):
+    def Model(d_in, d_out):
+        return FC((d_in,) + hs + (d_out,), act)
     return FiniteElementModel(out_dim, position, basis, Model)
 
 
-def GaussianRadialModel(out_dim, max_radius, number_of_basis, h, L, act, min_radius=0.):
+def GaussianRadialModel(out_dim, max_radius, number_of_basis, hs, act, min_radius=0.):
     """exp(-x^2 /spacing)"""
     spacing = (max_radius - min_radius) / (number_of_basis - 1)
     radii = torch.linspace(min_radius, max_radius, number_of_basis)
@@ -97,4 +85,4 @@ def GaussianRadialModel(out_dim, max_radius, number_of_basis, h, L, act, min_rad
 
     def basis(x):
         return x.div(sigma).pow(2).neg().exp().div(1.423085244900308)
-    return FiniteElementFCModel(out_dim, radii, basis, h, L, act)
+    return FiniteElementFCModel(out_dim, radii, basis, hs, act)

@@ -33,7 +33,7 @@ qm9_target_dict = {
 class Network(torch.nn.Module):
     def __init__(self, muls=(30, 10, 5), lmax=1,
                  num_layers=1, cutoff=10.0, rad_gaussians=40,
-                 rad_h=500, rad_layers=4, num_neighbors=20,
+                 rad_hs=(500, 500, 50), num_neighbors=20,
                  readout='add', dipole=False, mean=None, std=None, scale=None,
                  atomref=None, options=""):
         super().__init__()
@@ -59,8 +59,7 @@ class Network(torch.nn.Module):
             GaussianRadialModel,
             max_radius=cutoff,
             number_of_basis=rad_gaussians,
-            h=rad_h,
-            L=rad_layers,
+            hs=rad_hs,
             act=swish
         )
         self.Rs_sh = [(1, l, (-1)**l) for l in range(lmax + 1)]  # spherical harmonics representation
