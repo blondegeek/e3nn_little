@@ -409,6 +409,10 @@ CODE
             if self.nweight:
                 if weight is None:
                     weight = self.weight
+                if self.weight_batch:
+                    assert weight.shape == (features_1.shape[0], self.nweight)
+                else:
+                    assert weight.shape == (self.nweight,)
 
             wigners = [getattr(self, arg) for arg in self.wigners_names]
 
