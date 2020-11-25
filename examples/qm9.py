@@ -55,7 +55,7 @@ def execute(args):
 
     for epoch in range(args.num_epochs):
 
-        maes = []
+        errs = []
         loader = DataLoader(train_dataset, batch_size=args.bs, shuffle=True)
         for step, data in enumerate(loader):
             data = data.to(device)
@@ -65,42 +65,42 @@ def execute(args):
             (pred.view(-1) - data.y[:, target]).pow(2).mean().backward()
             optim.step()
 
-            mae = (pred.view(-1) - data.y[:, target]).abs()
-            maes += [mae.cpu().detach()]
+            err = pred.view(-1) - data.y[:, target]
+            errs += [err.cpu().detach()]
 
             if time.perf_counter() - wall_print > 15:
                 wall_print = time.perf_counter()
                 print((
                     f'[{epoch}] ['
                     f'wall={time.perf_counter() - wall:.0f} step={step}/{len(loader)} '
-                    f'mae={units * torch.cat(maes)[-200:].mean():.5f} '
+                    f'mae={units * torch.cat(errs)[-200:].abs().mean():.5f} '
                     f'lr={optim.param_groups[0]["lr"]:.1e}]'
                 ), flush=True)
 
-        train_mae = torch.cat(maes)
+        train_err = torch.cat(errs)
 
-        maes = []
+        errs = []
         loader = DataLoader(val_dataset, batch_size=256)
         for data in loader:
             data = data.to(device)
             with torch.no_grad():
                 pred = model(data.z, data.pos, data.batch)
 
-            mae = (pred.view(-1) - data.y[:, target]).abs()
-            maes += [mae.cpu().detach()]
-        val_mae = torch.cat(maes)
+            err = pred.view(-1) - data.y[:, target]
+            errs += [err.cpu().detach()]
+        val_err = torch.cat(errs)
 
         dynamics += [{
             'epoch': epoch,
             'wall': time.perf_counter() - wall,
-            'train_mae': units * train_mae,
-            'val_mae': units * val_mae,
+            'train_err': units * train_err,
+            'val_err': units * val_err,
             'lr': optim.param_groups[0]["lr"],
         }]
 
-        print(f'[{epoch}] Target: {target:02d}, MAE TRAIN: {units * train_mae.mean():.5f} ± {units * train_mae.std():.5f}, MAE VAL: {units * val_mae.mean():.5f} ± {units * val_mae.std():.5f}', flush=True)
+        print(f'[{epoch}] Target: {target:02d}, MAE TRAIN: {units * train_err.abs().mean():.5f} ± {units * train_err.abs().std():.5f}, MAE VAL: {units * val_err.abs().mean():.5f} ± {units * val_err.abs().std():.5f}', flush=True)
 
-        scheduler.step(val_mae.pow(2).mean())
+        scheduler.step(val_err.pow(2).mean())
 
         yield {
             'args': args,
