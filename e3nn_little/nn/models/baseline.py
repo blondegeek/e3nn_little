@@ -115,6 +115,7 @@ class Network(torch.nn.Module):
         # even + odd^2 = even
         assert h.shape[1] == 2
         h = h[:, 0] + h[:, 1].pow(2)
+        h = h.view(-1, 1)
 
         if self.mean is not None and self.std is not None:
             h = h * self.std + self.mean
