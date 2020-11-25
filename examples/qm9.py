@@ -27,7 +27,7 @@ def execute(args):
 
     model = Network(
         muls=(args.mul0, args.mul1, args.mul2), lmax=args.lmax, num_layers=args.num_layers, rad_gaussians=args.rad_gaussians,
-        rad_hs=(args.rad_h,) * args.rad_layers + (args.rad_bottleneck,),
+        rad_hs=(args.rad_h,) * args.rad_layers + (args.rad_bottleneck,), groups=args.groups,
         mean=0, std=1, atomref=dataset.atomref(target),
         options=args.arch
     )
@@ -129,6 +129,7 @@ def main():
     parser.add_argument("--bs", type=int, default=128)
     parser.add_argument("--num_epochs", type=int, default=1000)
     parser.add_argument("--arch", type=str, default="")
+    parser.add_argument("--groups", type=int, default=1)
 
     args = parser.parse_args()
 

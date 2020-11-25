@@ -9,7 +9,7 @@ from torch_scatter import scatter
 
 from e3nn_little import o3
 from e3nn_little.nn import (GatedBlockParity, GaussianRadialModel,
-                            WeightedTensorProduct, Linear)
+                            GroupedWeightedTensorProduct, Linear)
 from e3nn_little.util import swish
 
 
@@ -32,7 +32,7 @@ qm9_target_dict = {
 class Network(torch.nn.Module):
     def __init__(self, muls=(30, 10, 5), lmax=1,
                  num_layers=1, cutoff=10.0, rad_gaussians=40,
-                 rad_hs=(500, 500, 50), num_neighbors=20,
+                 rad_hs=(500, 500, 50), num_neighbors=20, groups=1,
                  readout='add', dipole=False, mean=None, std=None, scale=None,
                  atomref=None, options=""):
         super().__init__()
@@ -62,7 +62,7 @@ class Network(torch.nn.Module):
         modules = []
         for _ in range(num_layers):
             act = make_gated_block(Rs, muls, self.Rs_sh)
-            conv = Conv(Rs, act.Rs_in, self.Rs_sh, RadialModel)
+            conv = Conv(Rs, act.Rs_in, self.Rs_sh, RadialModel, groups)
             shortcut = Linear(Rs, act.Rs_out) if 'res' in self.options else None
 
             Rs = o3.simplify(act.Rs_out)
@@ -149,16 +149,16 @@ def make_gated_block(Rs_in, muls, Rs_sh):
 
 
 class Conv(MessagePassing):
-    def __init__(self, Rs_in, Rs_out, Rs_sh, RadialModel, normalization='component'):
+    def __init__(self, Rs_in, Rs_out, Rs_sh, RadialModel, groups=1, normalization='component'):
         super().__init__(aggr='add')
         self.Rs_in = o3.simplify(Rs_in)
         self.Rs_out = o3.simplify(Rs_out)
+        self.Rs_sh = o3.simplify(Rs_sh)
 
-        self.si = Linear(Rs_in, Rs_out)
-        self.tp = WeightedTensorProduct(Rs_in, Rs_sh, Rs_out, normalization=normalization, own_weight=False)
+        self.si = Linear(self.Rs_in, self.Rs_out)
+        self.tp = GroupedWeightedTensorProduct(self.Rs_in, self.Rs_sh, self.Rs_out, groups, normalization=normalization, own_weight=False)
         self.rm = RadialModel(self.tp.nweight)
 
-        self.Rs_sh = Rs_sh
         self.normalization = normalization
 
     def forward(self, x, edge_index, edge_vec, sh, size=None):
