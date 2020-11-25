@@ -42,7 +42,6 @@ class Network(torch.nn.Module):
         self.readout = readout
         self.cutoff = cutoff
         self.dipole = dipole
-        self.readout = 'add' if self.dipole else self.readout
         self.mean = mean
         self.std = std
         self.scale = scale
@@ -77,7 +76,7 @@ class Network(torch.nn.Module):
 
         self.layers = torch.nn.ModuleList(modules)
 
-        Rs_out = [(1, 0, 1)]
+        Rs_out = [(1, 0, 1), (1, 0, -1)]
         self.layers.append(Conv(Rs, Rs_out, self.Rs_sh, RadialModel))
 
         self.register_buffer('initial_atomref', atomref)
@@ -113,22 +112,17 @@ class Network(torch.nn.Module):
 
         h = self.layers[-1](h, edge_index, edge_vec, sh)
 
-        if self.dipole:
-            # Get center of mass.
-            mass = self.atomic_mass[z].view(-1, 1)
-            c = scatter(mass * pos, batch, dim=0) / scatter(mass, batch, dim=0)
-            h = h * (pos - c[batch])
+        # even + odd^2 = even
+        assert h.shape[1] == 2
+        h = h[:, 0] + h[:, 1].pow(2)
 
-        if not self.dipole and self.mean is not None and self.std is not None:
+        if self.mean is not None and self.std is not None:
             h = h * self.std + self.mean
 
-        if not self.dipole and self.atomref is not None:
+        if self.atomref is not None:
             h = h + self.atomref(z)
 
         out = scatter(h, batch, dim=0, reduce=self.readout)
-
-        if self.dipole:
-            out = torch.norm(out, dim=-1, keepdim=True)
 
         if self.scale is not None:
             out = self.scale * out
