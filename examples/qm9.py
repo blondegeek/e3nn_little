@@ -70,7 +70,12 @@ def execute(args):
 
             if time.perf_counter() - wall_print > 15:
                 wall_print = time.perf_counter()
-                print(f'[{epoch}] [wall={time.perf_counter() - wall:.0f} step={step}/{len(loader)} mae={units * torch.cat(maes)[-200:].mean():.5f}]', flush=True)
+                print((
+                    f'[{epoch}] ['
+                    f'wall={time.perf_counter() - wall:.0f} step={step}/{len(loader)} '
+                    f'mae={units * torch.cat(maes)[-200:].mean():.5f} '
+                    f'lr={optim.param_groups[0]["lr"]:.1e}]'
+                ), flush=True)
 
         train_mae = torch.cat(maes)
 
