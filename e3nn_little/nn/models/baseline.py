@@ -156,7 +156,7 @@ class Conv(MessagePassing):
         self.Rs_sh = o3.simplify(Rs_sh)
 
         self.si = Linear(self.Rs_in, self.Rs_out)
-        self.tp = GroupedWeightedTensorProduct(self.Rs_in, self.Rs_sh, self.Rs_out, groups, normalization=normalization, own_weight=False)
+        self.tp = GroupedWeightedTensorProduct(self.Rs_in, self.Rs_sh, self.Rs_out, groups, normalization=normalization, own_weight=False, weight_batch=True)
         self.rm = RadialModel(self.tp.nweight)
 
         self.normalization = normalization

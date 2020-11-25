@@ -8,7 +8,7 @@ from e3nn_little import o3
 from e3nn_little.util import eval_code
 
 
-def WeightedTensorProduct(Rs_in1, Rs_in2, Rs_out, normalization='component', own_weight=True):
+def WeightedTensorProduct(Rs_in1, Rs_in2, Rs_out, normalization='component', own_weight=True, weight_batch=False):
     Rs_in1 = o3.simplify(Rs_in1)
     Rs_in2 = o3.simplify(Rs_in2)
     Rs_out = o3.simplify(Rs_out)
@@ -20,10 +20,10 @@ def WeightedTensorProduct(Rs_in1, Rs_in2, Rs_out, normalization='component', own
         for i_out, (_, l_out, p_out) in enumerate(Rs_out)
         if abs(l_1 - l_2) <= l_out <= l_1 + l_2 and p_1 * p_2 == p_out
     ]
-    return CustomWeightedTensorProduct(Rs_in1, Rs_in2, Rs_out, instr, normalization, own_weight)
+    return CustomWeightedTensorProduct(Rs_in1, Rs_in2, Rs_out, instr, normalization, own_weight, weight_batch)
 
 
-def GroupedWeightedTensorProduct(Rs_in1, Rs_in2, Rs_out, groups=math.inf, normalization='component', own_weight=True):
+def GroupedWeightedTensorProduct(Rs_in1, Rs_in2, Rs_out, groups=math.inf, normalization='component', own_weight=True, weight_batch=False):
     Rs_in1 = o3.convention(Rs_in1)
     Rs_in2 = o3.convention(Rs_in2)
     Rs_out = o3.convention(Rs_out)
@@ -41,7 +41,7 @@ def GroupedWeightedTensorProduct(Rs_in1, Rs_in2, Rs_out, groups=math.inf, normal
         if abs(l_1 - l_2) <= l_out <= l_1 + l_2 and p_1 * p_2 == p_out
         if i_1 % groups == i_out % groups
     ]
-    return CustomWeightedTensorProduct(Rs_in1, Rs_in2, Rs_out, instr, normalization, own_weight)
+    return CustomWeightedTensorProduct(Rs_in1, Rs_in2, Rs_out, instr, normalization, own_weight, weight_batch)
 
 
 def ElementwiseTensorProduct(Rs_in1, Rs_in2, normalization='component'):
