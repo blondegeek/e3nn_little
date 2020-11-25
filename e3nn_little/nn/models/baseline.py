@@ -1,7 +1,6 @@
 # pylint: disable=not-callable, no-member, invalid-name, line-too-long, wildcard-import, unused-wildcard-import, missing-docstring, bare-except, abstract-method, arguments-differ
 from functools import partial
 
-import ase
 import torch
 from torch.autograd import profiler
 from torch.nn import Embedding
@@ -48,9 +47,6 @@ class Network(torch.nn.Module):
         self.num_neighbors = num_neighbors
         self.options = options
 
-        atomic_mass = torch.from_numpy(ase.data.atomic_masses)
-        self.register_buffer('atomic_mass', atomic_mass)
-
         self.embedding = Embedding(100, muls[0])
         Rs = [(muls[0], 0, 1)]
 
@@ -67,12 +63,11 @@ class Network(torch.nn.Module):
         for _ in range(num_layers):
             act = make_gated_block(Rs, muls, self.Rs_sh)
             conv = Conv(Rs, act.Rs_in, self.Rs_sh, RadialModel)
-            extra = Linear(act.Rs_out, act.Rs_out) if 'extra' in self.options else None
             shortcut = Linear(Rs, act.Rs_out) if 'res' in self.options else None
 
             Rs = o3.simplify(act.Rs_out)
 
-            modules += [torch.nn.ModuleList([conv, act, extra, shortcut])]
+            modules += [torch.nn.ModuleList([conv, act, shortcut])]
 
         self.layers = torch.nn.ModuleList(modules)
 
@@ -96,15 +91,12 @@ class Network(torch.nn.Module):
         edge_vec = pos[row] - pos[col]
         sh = o3.spherical_harmonics(self.Rs_sh, edge_vec, 'component') / self.num_neighbors**0.5
 
-        for conv, act, extra, shortcut in self.layers[:-1]:
+        for conv, act, shortcut in self.layers[:-1]:
             if shortcut:
                 s = shortcut(h)
 
             h = conv(h, edge_index, edge_vec, sh)  # convolution
             h = act(h)  # gate non linearity
-
-            if extra:
-                h = extra(h)  # optional extra linear layer
 
             if shortcut:
                 m = shortcut.output_mask

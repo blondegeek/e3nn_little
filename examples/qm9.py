@@ -43,7 +43,7 @@ def execute(args):
             mse.mean().backward()
         print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10), flush=True)
         prof.export_chrome_trace("trace.json")
-        if step == 2:
+        if step == 3:
             break
 
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -115,18 +115,18 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=str, required=True)
-    parser.add_argument("--mul0", type=int, default=30)
+    parser.add_argument("--mul0", type=int, default=50)
     parser.add_argument("--mul1", type=int, default=10)
     parser.add_argument("--mul2", type=int, default=0)
     parser.add_argument("--lmax", type=int, default=1)
     parser.add_argument("--num_layers", type=int, default=1)
     parser.add_argument("--rad_gaussians", type=int, default=40)
-    parser.add_argument("--rad_h", type=int, default=200)
+    parser.add_argument("--rad_h", type=int, default=300)
     parser.add_argument("--rad_bottleneck", type=int, default=50)
     parser.add_argument("--rad_layers", type=int, default=4)
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--bs", type=int, default=128)
-    parser.add_argument("--num_epochs", type=int, default=100)
+    parser.add_argument("--num_epochs", type=int, default=1000)
     parser.add_argument("--arch", type=str, default="")
 
     args = parser.parse_args()
