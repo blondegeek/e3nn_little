@@ -36,7 +36,7 @@ def execute(args):
     # profile
     loader = DataLoader(train_dataset, batch_size=args.bs, shuffle=False)
     for step, data in enumerate(loader):
-        with profiler.profile(use_cuda=True) as prof:
+        with profiler.profile(use_cuda=True, record_shapes=True) as prof:
             data = data.to(device)
             pred = model(data.z, data.pos, data.batch)
             mse = (pred.view(-1) - data.y[:, target]).pow(2)
