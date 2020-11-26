@@ -1,5 +1,6 @@
 # pylint: disable=not-callable, no-member, invalid-name, line-too-long, wildcard-import, unused-wildcard-import, missing-docstring, bare-except, abstract-method, arguments-differ
 import argparse
+import itertools
 import pickle
 import subprocess
 import time
@@ -52,7 +53,7 @@ def execute(args):
     wall = time.perf_counter()
     wall_print = time.perf_counter()
 
-    for epoch in range(args.num_epochs):
+    for epoch in itertools.count():
 
         errs = []
         loader = DataLoader(train_dataset, batch_size=args.bs, shuffle=True)
@@ -126,7 +127,6 @@ def main():
     parser.add_argument("--rad_layers", type=int, default=4)
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--bs", type=int, default=128)
-    parser.add_argument("--num_epochs", type=int, default=1000)
     parser.add_argument("--arch", type=str, default="")
     parser.add_argument("--groups", type=int, default=1)
 
