@@ -89,8 +89,9 @@ class GatedBlockParity(torch.nn.Module):
     def __init__(self, Rs_scalars, act_scalars, Rs_gates, act_gates, Rs_nonscalars):
         super().__init__()
 
-        self.Rs_in, self.perm = o3.sort(Rs_scalars + Rs_gates + Rs_nonscalars)
-        self.Rs_in = o3.simplify(self.Rs_in)
+        Rs_in, perm = o3.sort(Rs_scalars + Rs_gates + Rs_nonscalars)
+        self.Rs_in = o3.simplify(Rs_in)
+        self.register_buffer('perm', perm.to_dense())
         self.Rs_scalars, self.Rs_gates, self.Rs_nonscalars = o3.simplify(Rs_scalars), o3.simplify(Rs_gates), o3.simplify(Rs_nonscalars)
 
         self.act_scalars = Activation(Rs_scalars, act_scalars)
@@ -118,7 +119,7 @@ class GatedBlockParity(torch.nn.Module):
         input of shape [..., dim(self.Rs_in)]
         """
         with torch.autograd.profiler.record_function(repr(self)):
-            features = (self.perm.t() @ features.reshape(-1, features.shape[-1]).T).T.reshape(features.shape)
+            features = (features.reshape(-1, features.shape[-1]) @ self.perm).reshape(features.shape)
             scalars, gates, nonscalars = o3.cut(features, self.Rs_scalars, self.Rs_gates, self.Rs_nonscalars, dim_=-1)
             scalars = self.act_scalars(scalars)
             if gates.shape[-1]:
