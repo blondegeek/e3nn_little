@@ -1,4 +1,6 @@
 # pylint: disable=not-callable, no-member, invalid-name, line-too-long, wildcard-import, unused-wildcard-import, missing-docstring, bare-except
+import torch
+from torch_sparse import SparseTensor
 
 
 def cut(features, *Rss, dim_=-1):
@@ -109,3 +111,47 @@ def format_Rs(Rs):
         -1: "o",
     }
     return ",".join("{}{}{}".format("{}x".format(mul) if mul > 1 else "", l, d[p]) for mul, l, p in Rs if mul > 0)
+
+
+def sort(Rs):
+    """
+    :return: (Rs_out, permutation_matrix)
+    stable sorting of the representation by (l, p)
+
+    sorted = perm @ unsorted
+
+    >>> sort([(1, 1), (1, 0)])
+    ([(1, 0, 0), (1, 1, 0)],
+    tensor([[0., 0., 0., 1.],
+            [1., 0., 0., 0.],
+            [0., 1., 0., 0.],
+            [0., 0., 1., 0.]]))
+
+    Example usage:
+    sortedRs, permutation_matrix = sort(Rs)
+    permuted_input = einsum('ij,j->i', permutation_matrix, input)
+    """
+    Rs_in = simplify(Rs)
+    xs = []
+
+    j = 0  # input offset
+    for mul, l, p in Rs_in:
+        d = mul * (2 * l + 1)
+        xs.append((l, p, mul, j, d))
+        j += d
+
+    index = []
+
+    Rs_out = []
+    i = 0  # output offset
+    for l, p, mul, j, d in sorted(xs):
+        Rs_out.append((mul, l, p))
+        for _ in range(d):
+            index.append([i, j])
+            i += 1
+            j += 1
+
+    index = torch.tensor(index).T
+    permutation_matrix = SparseTensor(row=index[0], col=index[1], value=torch.ones(index.shape[1]))
+
+    return Rs_out, permutation_matrix
