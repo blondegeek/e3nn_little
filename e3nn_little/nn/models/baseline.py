@@ -100,7 +100,7 @@ class Network(torch.nn.Module):
 
             if shortcut:
                 m = shortcut.output_mask
-                h = 0.5**0.5 * s + (1 * (1-m) + 0.5**0.5 * m) * h
+                h = 0.5**0.5 * s + (1 + (0.5**0.5 - 1) * m) * h
 
         h = self.layers[-1](h, edge_index, edge_vec, sh)
 
