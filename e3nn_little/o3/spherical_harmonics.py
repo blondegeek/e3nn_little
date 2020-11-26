@@ -19,7 +19,7 @@ def spherical_harmonics(Rs, pos, normalization='none'):
     :param pos: tensor of shape [..., 3]
     :return: tensor of shape [..., m]
     """
-    with torch.autograd.profiler.record_function(f'spherical_harmonics({o3.format_Rs(Rs)}, {pos.shape[:-1]})'):
+    with torch.autograd.profiler.record_function(f'spherical_harmonics({o3.format_Rs(Rs)}, {tuple(pos.shape[:-1])})'):
         Rs = o3.simplify(Rs)
         *size, _ = pos.shape
         pos = pos.reshape(-1, 3)
