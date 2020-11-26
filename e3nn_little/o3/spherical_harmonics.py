@@ -19,37 +19,38 @@ def spherical_harmonics(Rs, pos, normalization='none'):
     :param pos: tensor of shape [..., 3]
     :return: tensor of shape [..., m]
     """
-    Rs = o3.simplify(Rs)
-    *size, _ = pos.shape
-    pos = pos.reshape(-1, 3)
-    d = torch.norm(pos, 2, dim=1)
-    pos = pos[d > 0]
-    pos = pos / d[d > 0, None]
+    with torch.autograd.profiler.record_function(f'spherical_harmonics({o3.format_Rs(Rs)}, {pos.shape[:-1]})'):
+        Rs = o3.simplify(Rs)
+        *size, _ = pos.shape
+        pos = pos.reshape(-1, 3)
+        d = torch.norm(pos, 2, dim=1)
+        pos = pos[d > 0]
+        pos = pos / d[d > 0, None]
 
-    # if z > x, rotate x-axis with z-axis
-    s = pos[:, 2].abs() > pos[:, 0].abs()
-    pos[s] = pos[s] @ pos.new_tensor([[0, 0, 1], [0, 1, 0], [-1, 0, 0]])
+        # if z > x, rotate x-axis with z-axis
+        s = pos[:, 2].abs() > pos[:, 0].abs()
+        pos[s] = pos[s] @ pos.new_tensor([[0, 0, 1], [0, 1, 0], [-1, 0, 0]])
 
-    alpha = torch.atan2(pos[:, 1], pos[:, 0])
-    z = pos[:, 2]
-    y = pos[:, :2].norm(dim=1)
+        alpha = torch.atan2(pos[:, 1], pos[:, 0])
+        z = pos[:, 2]
+        y = pos[:, :2].norm(dim=1)
 
-    sh = _spherical_harmonics_alpha_z_y(Rs, alpha, z, y)
+        sh = _spherical_harmonics_alpha_z_y(Rs, alpha, z, y)
 
-    # rotate back
-    sh[s] = sh[s] @ _rep_zx(tuple(Rs), pos.dtype, pos.device)
+        # rotate back
+        sh[s] = sh[s] @ _rep_zx(tuple(Rs), pos.dtype, pos.device)
 
-    if len(d) > len(sh):
-        out = sh.new_zeros(len(d), sh.shape[1])
-        out[d == 0] = math.sqrt(1 / (4 * math.pi)) * torch.cat([sh.new_ones(1) if l == 0 else sh.new_zeros(2 * l + 1) for mul, l, p in Rs for _ in range(mul)])
-        out[d > 0] = sh
-        sh = out
+        if len(d) > len(sh):
+            out = sh.new_zeros(len(d), sh.shape[1])
+            out[d == 0] = math.sqrt(1 / (4 * math.pi)) * torch.cat([sh.new_ones(1) if l == 0 else sh.new_zeros(2 * l + 1) for mul, l, p in Rs for _ in range(mul)])
+            out[d > 0] = sh
+            sh = out
 
-    if normalization == 'component':
-        sh.mul_(math.sqrt(4 * math.pi))
-    if normalization == 'norm':
-        sh.mul_(torch.cat([math.sqrt(4 * math.pi / (2 * l + 1)) * sh.new_ones(2 * l + 1) for mul, l, p in Rs for _ in range(mul)]))
-    return sh.reshape(*size, sh.shape[1])
+        if normalization == 'component':
+            sh.mul_(math.sqrt(4 * math.pi))
+        if normalization == 'norm':
+            sh.mul_(torch.cat([math.sqrt(4 * math.pi / (2 * l + 1)) * sh.new_ones(2 * l + 1) for mul, l, p in Rs for _ in range(mul)]))
+        return sh.reshape(*size, sh.shape[1])
 
 
 @lru_cache()

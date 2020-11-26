@@ -2,7 +2,6 @@
 from functools import partial
 
 import torch
-from torch.autograd import profiler
 from torch.nn import Embedding
 from torch_geometric.nn import MessagePassing, radius_graph
 from torch_scatter import scatter
@@ -92,17 +91,19 @@ class Network(torch.nn.Module):
         sh = o3.spherical_harmonics(self.Rs_sh, edge_vec, 'component') / self.num_neighbors**0.5
 
         for conv, act, shortcut in self.layers[:-1]:
-            if shortcut:
-                s = shortcut(h)
+            with torch.autograd.profiler.record_function("Layer"):
+                if shortcut:
+                    s = shortcut(h)
 
-            h = conv(h, edge_index, edge_vec, sh)  # convolution
-            h = act(h)  # gate non linearity
+                h = conv(h, edge_index, edge_vec, sh)  # convolution
+                h = act(h)  # gate non linearity
 
-            if shortcut:
-                m = shortcut.output_mask
-                h = 0.5**0.5 * s + (1 + (0.5**0.5 - 1) * m) * h
+                if shortcut:
+                    m = shortcut.output_mask
+                    h = 0.5**0.5 * s + (1 + (0.5**0.5 - 1) * m) * h
 
-        h = self.layers[-1](h, edge_index, edge_vec, sh)
+        with torch.autograd.profiler.record_function("Layer"):
+            h = self.layers[-1](h, edge_index, edge_vec, sh)
 
         # even + odd^2 = even
         assert h.shape[1] == 2
@@ -162,7 +163,7 @@ class Conv(MessagePassing):
         self.normalization = normalization
 
     def forward(self, x, edge_index, edge_vec, sh, size=None):
-        with profiler.record_function("Conv"):
+        with torch.autograd.profiler.record_function("Conv"):
             # x = [num_atoms, dim(Rs_in)]
             s = self.si(x)
 

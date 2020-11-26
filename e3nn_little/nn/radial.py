@@ -1,6 +1,5 @@
 # pylint: disable=arguments-differ, no-member, missing-docstring, invalid-name, line-too-long
 import torch
-from torch.autograd import profiler
 
 from e3nn_little.util import normalize2mom
 
@@ -56,7 +55,7 @@ class FC(torch.nn.Module):
         return f"{self.__class__.__name__}{self.hs}"
 
     def forward(self, x):
-        with profiler.record_function(repr(self)):
+        with torch.autograd.profiler.record_function(repr(self)):
             for i, W in enumerate(self.weights):
                 # first layer
                 if i == 0:

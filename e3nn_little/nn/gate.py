@@ -1,6 +1,5 @@
 # pylint: disable=invalid-name, arguments-differ, missing-docstring, line-too-long, no-member, unbalanced-tuple-unpacking, abstract-method
 import torch
-from torch.autograd import profiler
 
 from e3nn_little import o3, nn
 from e3nn_little.util import normalize2mom
@@ -71,7 +70,7 @@ class Activation(torch.nn.Module):
         '''
         :param features: [..., channels, ...]
         '''
-        with profiler.record_function(repr(self)):
+        with torch.autograd.profiler.record_function(repr(self)):
             output = []
             index = 0
             for mul, act in self.acts:
@@ -114,7 +113,7 @@ class GatedBlockParity(torch.nn.Module):
         )
 
     def forward(self, features, dim=-1):
-        with profiler.record_function(repr(self)):
+        with torch.autograd.profiler.record_function(repr(self)):
             scalars, gates, nonscalars = o3.cut(features, self.Rs_scalars, self.Rs_gates, self.Rs_nonscalars, dim_=dim)
             scalars = self.act_scalars(scalars)
             if gates.shape[dim]:

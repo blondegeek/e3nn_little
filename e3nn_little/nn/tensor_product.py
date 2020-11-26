@@ -3,7 +3,6 @@ import math
 from typing import List, Tuple
 
 import torch
-from torch.autograd import profiler
 from e3nn_little import o3
 from e3nn_little.util import eval_code
 
@@ -190,9 +189,9 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
             if dim_1 == 0 or dim_2 == 0 or dim_out == 0:
                 continue
 
-            code += f"    # {l_1} x {l_2} = {l_out}\n"
-            code += f"    s1 = x1_{i_1}\n"
-            code += f"    s2 = x2_{i_2}\n"
+            code += f"    with torch.autograd.profiler.record_function('{l_1} x {l_2} = {l_out} {mode} {weight}'):\n"
+            code += f"        s1 = x1_{i_1}\n"
+            code += f"        s2 = x2_{i_2}\n"
 
             assert mode in ['uvw', 'uvu', 'uvv', 'uuw', 'uuu', 'uvuv']
 
@@ -205,13 +204,13 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
                 # 1 x 1 = 1
 
                 if (l_1, l_2, l_out) == (0, 0, 0) and mode == 'uvw' and normalization in ['component', 'norm'] and weight:
-                    code += f"    s1 = s1.reshape(batch, {mul_1})\n"
-                    code += f"    s2 = s2.reshape(batch, {mul_2})\n"
+                    code += f"        s1 = s1.reshape(batch, {mul_1})\n"
+                    code += f"        s2 = s2.reshape(batch, {mul_2})\n"
 
                     dim_w = mul_1 * mul_2 * mul_out
-                    code += f"    sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2}, {mul_out})\n"
+                    code += f"        sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2}, {mul_out})\n"
                     index_w += dim_w
-                    code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uvw,zu,zv->zw', sw, s1, s2)\n"
+                    code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uvw,zu,zv->zw', sw, s1, s2)\n"
                     code += "\n"
 
                     for pos in range(index_out, index_out + dim_out):
@@ -219,11 +218,11 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
                     continue
 
                 if l_1 == 0 and l_2 == l_out and mode == 'uvw' and normalization == 'component' and weight:
-                    code += f"    s1 = s1.reshape(batch, {mul_1})\n"
+                    code += f"        s1 = s1.reshape(batch, {mul_1})\n"
                     dim_w = mul_1 * mul_2 * mul_out
-                    code += f"    sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2}, {mul_out})\n"
+                    code += f"        sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2}, {mul_out})\n"
                     index_w += dim_w
-                    code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uvw,zu,zvi->zwi', sw, s1, s2).reshape(batch, {dim_out})\n"
+                    code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uvw,zu,zvi->zwi', sw, s1, s2).reshape(batch, {dim_out})\n"
                     code += "\n"
 
                     for pos in range(index_out, index_out + dim_out):
@@ -231,11 +230,11 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
                     continue
 
                 if l_2 == 0 and l_1 == l_out and mode == 'uvw' and normalization == 'component' and weight:
-                    code += f"    s2 = s2.reshape(batch, {mul_2})\n"
+                    code += f"        s2 = s2.reshape(batch, {mul_2})\n"
                     dim_w = mul_1 * mul_2 * mul_out
-                    code += f"    sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2}, {mul_out})\n"
+                    code += f"        sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2}, {mul_out})\n"
                     index_w += dim_w
-                    code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uvw,zui,zv->zwi', sw, s1, s2).reshape(batch, {dim_out})\n"
+                    code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uvw,zui,zv->zwi', sw, s1, s2).reshape(batch, {dim_out})\n"
                     code += "\n"
 
                     for pos in range(index_out, index_out + dim_out):
@@ -245,9 +244,9 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
                 if l_1 == l_2 and l_out == 0 and mode == 'uvw' and normalization == 'component' and weight:
                     # Cl_l_0 = eye(3) / sqrt(2L+1)
                     dim_w = mul_1 * mul_2 * mul_out
-                    code += f"    sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2}, {mul_out}).div({(2 * l_1 + 1)**0.5})\n"
+                    code += f"        sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2}, {mul_out}).div({(2 * l_1 + 1)**0.5})\n"
                     index_w += dim_w
-                    code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uvw,zui,zvi->zw', sw, s1, s2).reshape(batch, {dim_out})\n"
+                    code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uvw,zui,zvi->zw', sw, s1, s2).reshape(batch, {dim_out})\n"
                     code += "\n"
 
                     for pos in range(index_out, index_out + dim_out):
@@ -256,13 +255,13 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
 
                 if (l_1, l_2, l_out) == (1, 1, 1) and mode == 'uvw' and normalization == 'component' and weight:
                     # C1_1_1 = levi-civita / sqrt(2)
-                    code += f"    s1 = s1.reshape(batch, {mul_1}, 1, {2 * l_1 + 1})\n"
-                    code += f"    s2 = s2.reshape(batch, 1, {mul_2}, {2 * l_2 + 1})\n"
-                    code += f"    s1, s2 = torch.broadcast_tensors(s1, s2)\n"
+                    code += f"        s1 = s1.reshape(batch, {mul_1}, 1, {2 * l_1 + 1})\n"
+                    code += f"        s2 = s2.reshape(batch, 1, {mul_2}, {2 * l_2 + 1})\n"
+                    code += f"        s1, s2 = torch.broadcast_tensors(s1, s2)\n"
                     dim_w = mul_1 * mul_2 * mul_out
-                    code += f"    sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2}, {mul_out}).div({2**0.5})\n"
+                    code += f"        sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2}, {mul_out}).div({2**0.5})\n"
                     index_w += dim_w
-                    code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uvw,zuvi->zwi', sw, torch.cross(s1, s2, dim=3)).reshape(batch, {dim_out})\n"
+                    code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uvw,zuvi->zwi', sw, torch.cross(s1, s2, dim=3)).reshape(batch, {dim_out})\n"
                     code += "\n"
 
                     for pos in range(index_out, index_out + dim_out):
@@ -271,9 +270,9 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
 
             if last_ss != (i_1, i_2, mode[:2]):
                 if mode[:2] == 'uv':
-                    code += f"    ss = ein('zui,zvj->zuvij', s1, s2)\n"
+                    code += f"        ss = ein('zui,zvj->zuvij', s1, s2)\n"
                 if mode[:2] == 'uu':
-                    code += f"    ss = ein('zui,zuj->zuij', s1, s2)\n"
+                    code += f"        ss = ein('zui,zuj->zuij', s1, s2)\n"
                 last_ss = (i_1, i_2, mode[:2])
 
             wigners.add((l_1, l_2, l_out))
@@ -281,8 +280,8 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
             if mode == 'uvw':
                 assert weight
                 dim_w = mul_1 * mul_2 * mul_out
-                code += f"    sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2}, {mul_out})\n"
-                code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uvw,ijk,zuvij->zwk', sw, C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
+                code += f"        sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2}, {mul_out})\n"
+                code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uvw,ijk,zuvij->zwk', sw, C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
 
                 for pos in range(index_out, index_out + dim_out):
                     count[pos] += mul_1 * mul_2
@@ -291,11 +290,11 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
                 assert mul_1 == mul_out
                 if weight:
                     dim_w = mul_1 * mul_2
-                    code += f"    sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2})\n"
-                    code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uv,ijk,zuvij->zuk', sw, C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
+                    code += f"        sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2})\n"
+                    code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uv,ijk,zuvij->zuk', sw, C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
                 else:
                     dim_w = 0
-                    code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('ijk,zuvij->zuk', C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
+                    code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('ijk,zuvij->zuk', C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
 
                 for pos in range(index_out, index_out + dim_out):
                     count[pos] += mul_2
@@ -304,11 +303,11 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
                 assert mul_2 == mul_out
                 if weight:
                     dim_w = mul_1 * mul_2
-                    code += f"    sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2})\n"
-                    code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uv,ijk,zuvij->zvk', sw, C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
+                    code += f"        sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2})\n"
+                    code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uv,ijk,zuvij->zvk', sw, C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
                 else:
                     dim_w = 0
-                    code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('ijk,zuvij->zvk', C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
+                    code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('ijk,zuvij->zvk', C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
 
                 for pos in range(index_out, index_out + dim_out):
                     count[pos] += mul_1
@@ -317,8 +316,8 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
                 assert mul_1 == mul_2
                 assert weight
                 dim_w = mul_1 * mul_out
-                code += f"    sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_out})\n"
-                code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uw,ijk,zuij->zwk', sw, C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
+                code += f"        sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_out})\n"
+                code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uw,ijk,zuij->zwk', sw, C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
 
                 for pos in range(index_out, index_out + dim_out):
                     count[pos] += mul_1
@@ -327,11 +326,11 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
                 assert mul_1 == mul_2 == mul_out
                 if weight:
                     dim_w = mul_1
-                    code += f"    sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1})\n"
-                    code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >u,ijk,zuij->zuk', sw, C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
+                    code += f"        sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1})\n"
+                    code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >u,ijk,zuij->zuk', sw, C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
                 else:
                     dim_w = 0
-                    code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('ijk,zuij->zuk', C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
+                    code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('ijk,zuij->zuk', C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
 
                 for pos in range(index_out, index_out + dim_out):
                     count[pos] += 1
@@ -340,11 +339,11 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
                 assert mul_1 * mul_2 == mul_out
                 if weight:
                     dim_w = mul_1 * mul_2
-                    code += f"    sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2})\n"
-                    code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uv,ijk,zuvij->zuvk', sw, C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
+                    code += f"        sw = w[< weight index >{index_w}:{index_w+dim_w}].reshape(< weight shape >{mul_1}, {mul_2})\n"
+                    code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('< weight sym >uv,ijk,zuvij->zuvk', sw, C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
                 else:
                     dim_w = 0
-                    code += f"    out[:, {index_out}:{index_out+dim_out}] += ein('ijk,zuvij->zuvk', C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
+                    code += f"        out[:, {index_out}:{index_out+dim_out}] += ein('ijk,zuvij->zuvk', C{l_1}_{l_2}_{l_out}, ss).reshape(batch, {dim_out})\n"
 
                 for pos in range(index_out, index_out + dim_out):
                     count[pos] += 1
@@ -417,7 +416,7 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
         """
         :return:         tensor [..., channel]
         """
-        with profiler.record_function(repr(self)):
+        with torch.autograd.profiler.record_function(repr(self)):
             *size, n = features_1.size()
             features_1 = features_1.reshape(-1, n)
             assert n == o3.dim(self.Rs_in1), f"{n} is not {o3.dim(self.Rs_in1)}"

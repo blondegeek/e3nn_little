@@ -5,7 +5,6 @@ import subprocess
 import time
 
 import torch
-from torch.autograd import profiler
 from torch_geometric.data import DataLoader
 from torch_geometric.datasets import QM9
 from torch_geometric.nn import SchNet
@@ -36,7 +35,7 @@ def execute(args):
     # profile
     loader = DataLoader(train_dataset, batch_size=args.bs, shuffle=False)
     for step, data in enumerate(loader):
-        with profiler.profile(use_cuda=True, record_shapes=True) as prof:
+        with torch.autograd.profiler.profile(use_cuda=True, record_shapes=True) as prof:
             data = data.to(device)
             pred = model(data.z, data.pos, data.batch)
             mse = (pred.view(-1) - data.y[:, target]).pow(2)
