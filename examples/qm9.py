@@ -47,7 +47,7 @@ def execute(args):
             break
 
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optim, patience=25, factor=0.8, min_lr=1e-6)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optim, patience=25, factor=0.5, verbose=True)
 
     dynamics = []
     wall = time.perf_counter()
