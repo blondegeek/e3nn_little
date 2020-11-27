@@ -2,3 +2,4 @@
 from .rs_list import *  # noqa
 from .spherical_harmonics import *  # noqa
 from .wigner import *  # noqa
+from .real_space import *  # noqa
