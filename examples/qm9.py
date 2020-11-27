@@ -1,5 +1,6 @@
 # pylint: disable=not-callable, no-member, invalid-name, line-too-long, wildcard-import, unused-wildcard-import, missing-docstring, bare-except, abstract-method, arguments-differ
 import argparse
+import datetime
 import itertools
 import pickle
 import subprocess
@@ -42,7 +43,7 @@ def execute(args):
             mse = (pred.view(-1) - data.y[:, target]).pow(2)
             mse.mean().backward()
         print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10), flush=True)
-        prof.export_chrome_trace("trace.json")
+        prof.export_chrome_trace(f"{datetime.datetime.now()}.json")
         if step == 3:
             break
 
