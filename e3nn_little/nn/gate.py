@@ -1,8 +1,9 @@
 # pylint: disable=invalid-name, arguments-differ, missing-docstring, line-too-long, no-member, unbalanced-tuple-unpacking, abstract-method
 import torch
 
-from e3nn_little import o3, nn
-from e3nn_little.util import normalize2mom
+from e3nn_little import nn, o3
+from e3nn_little.util import (get_sparse_buffer, normalize2mom,
+                              register_sparse_buffer, sparse_multiply)
 
 
 class Activation(torch.nn.Module):
@@ -89,10 +90,13 @@ class GatedBlockParity(torch.nn.Module):
     def __init__(self, Rs_scalars, act_scalars, Rs_gates, act_gates, Rs_nonscalars):
         super().__init__()
 
-        Rs_in, perm = o3.sort(Rs_scalars + Rs_gates + Rs_nonscalars)
-        self.Rs_in = o3.simplify(Rs_in)
-        self.register_buffer('perm', perm.to_dense())
         self.Rs_scalars, self.Rs_gates, self.Rs_nonscalars = o3.simplify(Rs_scalars), o3.simplify(Rs_gates), o3.simplify(Rs_nonscalars)
+
+        Rs_in, perm = o3.sort(self.Rs_scalars + self.Rs_gates + self.Rs_nonscalars)
+        self.Rs_in = o3.simplify(Rs_in)
+        register_sparse_buffer(self, "perm_scalars", perm[:, :o3.dim(self.Rs_scalars)].t())
+        register_sparse_buffer(self, "perm_gates", perm[:, o3.dim(self.Rs_scalars):o3.dim(self.Rs_scalars) + o3.dim(self.Rs_gates)].t())
+        register_sparse_buffer(self, "perm_nonscalars", perm[:, o3.dim(self.Rs_scalars) + o3.dim(self.Rs_gates):].t())
 
         self.act_scalars = Activation(Rs_scalars, act_scalars)
         Rs_scalars = self.act_scalars.Rs_out
@@ -103,7 +107,7 @@ class GatedBlockParity(torch.nn.Module):
         self.mul = nn.ElementwiseTensorProduct(Rs_nonscalars, Rs_gates)
         Rs_nonscalars = self.mul.Rs_out
 
-        self.Rs_out = Rs_scalars + Rs_nonscalars
+        self.Rs_out = o3.simplify(Rs_scalars + Rs_nonscalars)
 
     def __repr__(self):
         return "{name} ({Rs_scalars} + {Rs_gates} + {Rs_nonscalars} -> {Rs_out})".format(
@@ -119,8 +123,10 @@ class GatedBlockParity(torch.nn.Module):
         input of shape [..., dim(self.Rs_in)]
         """
         with torch.autograd.profiler.record_function(repr(self)):
-            features = (features.reshape(-1, features.shape[-1]) @ self.perm).reshape(features.shape)
-            scalars, gates, nonscalars = o3.cut(features, self.Rs_scalars, self.Rs_gates, self.Rs_nonscalars, dim_=-1)
+            scalars = sparse_multiply(get_sparse_buffer(self, 'perm_scalars'), features, -1)
+            gates = sparse_multiply(get_sparse_buffer(self, 'perm_gates'), features, -1)
+            nonscalars = sparse_multiply(get_sparse_buffer(self, 'perm_nonscalars'), features, -1)
+
             scalars = self.act_scalars(scalars)
             if gates.shape[-1]:
                 gates = self.act_gates(gates)
