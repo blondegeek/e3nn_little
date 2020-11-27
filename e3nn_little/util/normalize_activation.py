@@ -14,8 +14,9 @@ def moment(f, n):
 
 def normalize2mom(f):
     cst = 1 / moment(f, 2)**0.5
-    if abs(cst - 1) < 1e-6:
+    if abs(cst - 1) < 1e-4:
         return f
     def g(z):
         return f(z).mul(cst)
+    g.cst = cst
     return g

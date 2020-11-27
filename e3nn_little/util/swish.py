@@ -1,16 +1,20 @@
 # pylint: disable=not-callable, no-member, invalid-name, line-too-long, wildcard-import, unused-wildcard-import, missing-docstring, bare-except, arguments-differ
+"""
+normalized version of swish such that
+<swish(z)^2> = 1 for z normal
+"""
 import torch
 
 
 @torch.jit.script
 def _swish_jit_fwd(x):
-    return x * torch.sigmoid(x)
+    return x * torch.sigmoid(x) * 1.679176792398942
 
 
 @torch.jit.script
 def _swish_jit_bwd(x, grad_output):
     x_sigmoid = torch.sigmoid(x)
-    return grad_output * (x_sigmoid * (1 + x * (1 - x_sigmoid)))
+    return grad_output * (x_sigmoid * (1 + x * (1 - x_sigmoid))) * 1.679176792398942
 
 
 class _SwishJitAutoFn(torch.autograd.Function):
