@@ -189,7 +189,11 @@ def main(< w3j >x1: torch.Tensor, x2: torch.Tensor, w: torch.Tensor) -> torch.Te
             if dim_1 == 0 or dim_2 == 0 or dim_out == 0:
                 continue
 
-            code += f"    with torch.autograd.profiler.record_function('{l_1} x {l_2} = {l_out} {mode} {weight}'):\n"
+            code += (
+                f"    with torch.autograd.profiler.record_function("
+                f"'{o3.format_Rs([self.Rs_in1[i_1]])} x {o3.format_Rs([self.Rs_in2[i_2]])} "
+                f"= {o3.format_Rs([self.Rs_out[i_out]])} {mode} {weight}'):\n"
+            )
             code += f"        s1 = x1_{i_1}\n"
             code += f"        s2 = x2_{i_2}\n"
 
