@@ -70,9 +70,14 @@ def execute(args):
 
             if time.perf_counter() - wall_print > 15:
                 wall_print = time.perf_counter()
+                w = time.perf_counter() - wall
+                e = epoch + (step + 1) / len(loader)
                 print((
-                    f'[{epoch}] ['
-                    f'wall={time.perf_counter() - wall:.0f} step={step}/{len(loader)} '
+                    f'[{e:.1f}] ['
+                    f'wall={w:.0f} '
+                    f'wall/epoch={w / e:.0f}s '
+                    f'wall/step={1e3 * w / e / len(loader):.0f}ms '
+                    f'step={step}/{len(loader)} '
                     f'mae={units * torch.cat(errs)[-200:].abs().mean():.5f} '
                     f'lr={optim.param_groups[0]["lr"]:.1e}]'
                 ), flush=True)
@@ -93,8 +98,26 @@ def execute(args):
         dynamics += [{
             'epoch': epoch,
             'wall': time.perf_counter() - wall,
-            'train_err': units * train_err,
-            'val_err': units * val_err,
+            'train': {
+                'mae': {
+                    'mean': units * train_err.abs().mean().item(),
+                    'std': units * train_err.abs().std().item(),
+                },
+                'mse': {
+                    'mean': units * train_err.pow(2).mean().item(),
+                    'std': units * train_err.pow(2).std().item(),
+                }
+            },
+            'val': {
+                'mae': {
+                    'mean': units * val_err.abs().mean().item(),
+                    'std': units * val_err.abs().std().item(),
+                },
+                'mse': {
+                    'mean': units * val_err.pow(2).mean().item(),
+                    'std': units * val_err.pow(2).std().item(),
+                }
+            },
             'lr': optim.param_groups[0]["lr"],
         }]
 
@@ -105,6 +128,7 @@ def execute(args):
         yield {
             'args': args,
             'dynamics': dynamics,
+            'state': {k: v.cpu() for k, v in model.state_dict()},
         }
 
 
