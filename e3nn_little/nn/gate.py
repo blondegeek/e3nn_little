@@ -2,8 +2,7 @@
 import torch
 
 from e3nn_little import nn, o3
-from e3nn_little.util import (get_sparse_buffer, normalize2mom,
-                              register_sparse_buffer, sparse_multiply)
+from e3nn_little.util import normalize2mom
 
 
 class Activation(torch.nn.Module):
@@ -64,7 +63,7 @@ class Activation(torch.nn.Module):
             if p_in != 0 and p == 0:
                 raise ValueError("warning! the parity is violated")
 
-        self.Rs_out = Rs_out
+        self.Rs_out = o3.simplify(Rs_out)
         self.acts = acts
 
     def forward(self, features, dim=-1):
@@ -86,17 +85,38 @@ class Activation(torch.nn.Module):
                 return features.new_zeros(*size)
 
 
+class Sortcut(torch.nn.Module):
+    def __init__(self, *Rs_outs):
+        super().__init__()
+        self.Rs_outs = tuple(o3.simplify(Rs) for Rs in Rs_outs)
+        def key(rs):
+            _mul, l, p = rs
+            return (l, p)
+        self.Rs_in = o3.simplify(sorted((x for Rs in self.Rs_outs for x in Rs), key=key))
+
+    def forward(self, x):
+        outs = tuple(x.new_zeros(x.shape[:-1] + (o3.dim(Rs),)) for Rs in self.Rs_outs)
+        i_in = 0
+        for _, l_in, p_in in self.Rs_in:
+            for Rs_out, out in zip(self.Rs_outs, outs):
+                i_out = 0
+                for mul_out, l_out, p_out in Rs_out:
+                    d = mul_out * (2 * l_out + 1)
+                    if (l_in, p_in) == (l_out, p_out):
+                        out[..., i_out:i_out + d] = x[..., i_in:i_in + d]
+                        i_in += d
+                    i_out += d
+        return outs
+
+
 class GatedBlockParity(torch.nn.Module):
     def __init__(self, Rs_scalars, act_scalars, Rs_gates, act_gates, Rs_nonscalars):
         super().__init__()
 
-        self.Rs_scalars, self.Rs_gates, self.Rs_nonscalars = o3.simplify(Rs_scalars), o3.simplify(Rs_gates), o3.simplify(Rs_nonscalars)
-
-        Rs_in, perm = o3.sort(self.Rs_scalars + self.Rs_gates + self.Rs_nonscalars)
-        self.Rs_in = o3.simplify(Rs_in)
-        register_sparse_buffer(self, "perm_scalars", perm[:, :o3.dim(self.Rs_scalars)].t())
-        register_sparse_buffer(self, "perm_gates", perm[:, o3.dim(self.Rs_scalars):o3.dim(self.Rs_scalars) + o3.dim(self.Rs_gates)].t())
-        register_sparse_buffer(self, "perm_nonscalars", perm[:, o3.dim(self.Rs_scalars) + o3.dim(self.Rs_gates):].t())
+        self.sc = Sortcut(Rs_scalars, Rs_gates)
+        self.Rs_scalars, self.Rs_gates = self.sc.Rs_outs
+        self.Rs_nonscalars = o3.simplify(Rs_nonscalars)
+        self.Rs_in = self.sc.Rs_in + self.Rs_nonscalars
 
         self.act_scalars = Activation(Rs_scalars, act_scalars)
         Rs_scalars = self.act_scalars.Rs_out
@@ -107,7 +127,7 @@ class GatedBlockParity(torch.nn.Module):
         self.mul = nn.ElementwiseTensorProduct(Rs_nonscalars, Rs_gates)
         Rs_nonscalars = self.mul.Rs_out
 
-        self.Rs_out = o3.simplify(Rs_scalars + Rs_nonscalars)
+        self.Rs_out = Rs_scalars + Rs_nonscalars
 
     def __repr__(self):
         return "{name} ({Rs_scalars} + {Rs_gates} + {Rs_nonscalars} -> {Rs_out})".format(
@@ -123,9 +143,8 @@ class GatedBlockParity(torch.nn.Module):
         input of shape [..., dim(self.Rs_in)]
         """
         with torch.autograd.profiler.record_function(repr(self)):
-            scalars = sparse_multiply(get_sparse_buffer(self, 'perm_scalars'), features, -1)
-            gates = sparse_multiply(get_sparse_buffer(self, 'perm_gates'), features, -1)
-            nonscalars = sparse_multiply(get_sparse_buffer(self, 'perm_nonscalars'), features, -1)
+            scalars, gates = self.sc(features)
+            nonscalars = features[..., scalars.shape[-1] + gates.shape[-1]:]
 
             scalars = self.act_scalars(scalars)
             if gates.shape[-1]:
