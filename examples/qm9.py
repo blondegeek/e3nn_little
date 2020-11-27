@@ -128,7 +128,7 @@ def execute(args):
         yield {
             'args': args,
             'dynamics': dynamics,
-            'state': {k: v.cpu() for k, v in model.state_dict().item()},
+            'state': {k: v.cpu() for k, v in model.state_dict().items()},
         }
 
 
