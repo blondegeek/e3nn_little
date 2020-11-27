@@ -54,7 +54,7 @@ class Network(torch.nn.Module):
             max_radius=cutoff,
             number_of_basis=rad_gaussians,
             hs=rad_hs,
-            act=swish
+            act=None if 'relu' in options else swish
         )
         self.Rs_sh = [(1, l, (-1)**l) for l in range(lmax + 1)]  # spherical harmonics representation
 

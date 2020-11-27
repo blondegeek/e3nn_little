@@ -70,13 +70,42 @@ class FC(torch.nn.Module):
             return x
 
 
-def FiniteElementFCModel(out_dim, position, basis, hs, act):
-    def Model(d_in, d_out):
-        return FC((d_in,) + hs + (d_out,), act)
+class FCrelu(torch.nn.Module):
+    def __init__(self, hs):
+        super().__init__()
+        assert isinstance(hs, tuple)
+        self.hs = hs
+        weights = []
+
+        for h1, h2 in zip(self.hs, self.hs[1:]):
+            weights.append(torch.nn.Parameter(torch.randn(h1, h2)))
+
+        self.weights = torch.nn.ParameterList(weights)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}{self.hs}"
+
+    def forward(self, x):
+        with torch.autograd.profiler.record_function(repr(self)):
+            for i, W in enumerate(self.weights):
+                # first layer
+                if i == 0:
+                    x = x @ W
+                else:
+                    x = x @ W.mul(2**0.5 / x.shape[1]**0.5)
+
+                # not last layer
+                if i < len(self.weights) - 1:
+                    x.relu_()
+
+            return x
+
+
+def FiniteElementFCModel(out_dim, position, basis, Model):
     return FiniteElementModel(out_dim, position, basis, Model)
 
 
-def GaussianRadialModel(out_dim, max_radius, number_of_basis, hs, act, min_radius=0.):
+def GaussianRadialModel(out_dim, max_radius, number_of_basis, hs, act=None, min_radius=0.):
     """exp(-x^2 /spacing)"""
     spacing = (max_radius - min_radius) / (number_of_basis - 1)
     radii = torch.linspace(min_radius, max_radius, number_of_basis)
@@ -84,4 +113,12 @@ def GaussianRadialModel(out_dim, max_radius, number_of_basis, hs, act, min_radiu
 
     def basis(x):
         return x.div(sigma).pow(2).neg().exp().div(1.423085244900308)
-    return FiniteElementFCModel(out_dim, radii, basis, hs, act)
+
+    if act is not None:
+        def Model(d_in, d_out):
+            return FC((d_in,) + hs + (d_out,), act)
+    else:
+        def Model(d_in, d_out):
+            return FCrelu((d_in,) + hs + (d_out,))
+
+    return FiniteElementFCModel(out_dim, radii, basis, Model)

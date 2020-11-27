@@ -29,7 +29,7 @@ def execute(args):
         muls=(args.mul0, args.mul1, args.mul2), lmax=args.lmax, num_layers=args.num_layers, rad_gaussians=args.rad_gaussians,
         rad_hs=(args.rad_h,) * args.rad_layers + (args.rad_bottleneck,), groups=args.groups,
         mean=0, std=1, atomref=dataset.atomref(target),
-        options=args.arch
+        options=args.opts
     )
     model = model.to(device)
 
@@ -151,7 +151,7 @@ def main():
     parser.add_argument("--rad_layers", type=int, default=4)
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--bs", type=int, default=128)
-    parser.add_argument("--arch", type=str, default="")
+    parser.add_argument("--opts", type=str, default="")
     parser.add_argument("--groups", type=int, default=1)
 
     args = parser.parse_args()
