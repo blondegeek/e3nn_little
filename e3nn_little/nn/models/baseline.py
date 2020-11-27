@@ -85,7 +85,7 @@ class Network(torch.nn.Module):
 
         h = self.embedding(z)
 
-        edge_index = radius_graph(pos, r=self.cutoff, batch=batch)
+        edge_index = radius_graph(pos, r=self.cutoff, batch=batch, max_num_neighbors=1000)
         row, col = edge_index
         edge_vec = pos[row] - pos[col]
         sh = o3.spherical_harmonics(self.Rs_sh, edge_vec, 'component') / self.num_neighbors**0.5
