@@ -74,7 +74,7 @@ def execute(args):
                 e = epoch + (step + 1) / len(loader)
                 print((
                     f'[{e:.1f}] ['
-                    f'wall={w:.0f} '
+                    f'wall={w / 3600:.2f}h '
                     f'wall/epoch={w / e:.0f}s '
                     f'wall/step={1e3 * w / e / len(loader):.0f}ms '
                     f'step={step}/{len(loader)} '
