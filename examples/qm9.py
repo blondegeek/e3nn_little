@@ -42,10 +42,9 @@ def execute(args):
             pred = model(data.z, data.pos, data.batch)
             mse = (pred.view(-1) - data.y[:, target]).pow(2)
             mse.mean().backward()
-        print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10), flush=True)
-        prof.export_chrome_trace(f"{datetime.datetime.now()}.json")
-        if step == 3:
+        if step == 5:
             break
+    prof.export_chrome_trace(f"{datetime.datetime.now()}.json")
 
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optim, patience=25, factor=0.5, verbose=True)
