@@ -29,9 +29,9 @@ qm9_target_dict = {
 
 
 class Network(torch.nn.Module):
-    def __init__(self, muls=(30, 10, 5), lmax=1,
-                 num_layers=1, cutoff=10.0, rad_gaussians=40,
-                 rad_hs=(500, 500, 50), num_neighbors=20, groups=1,
+    def __init__(self, muls=(50, 10, 0), lmax=1,
+                 num_layers=2, cutoff=10.0, rad_gaussians=40,
+                 rad_hs=(300, 300, 300, 300, 50), num_neighbors=20, groups=2,
                  readout='add', dipole=False, mean=None, std=None, scale=None,
                  atomref=None, options=""):
         super().__init__()

@@ -144,7 +144,7 @@ def main():
     parser.add_argument("--mul1", type=int, default=10)
     parser.add_argument("--mul2", type=int, default=0)
     parser.add_argument("--lmax", type=int, default=1)
-    parser.add_argument("--num_layers", type=int, default=1)
+    parser.add_argument("--num_layers", type=int, default=2)
     parser.add_argument("--rad_gaussians", type=int, default=40)
     parser.add_argument("--rad_h", type=int, default=300)
     parser.add_argument("--rad_bottleneck", type=int, default=50)
@@ -152,7 +152,7 @@ def main():
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--bs", type=int, default=128)
     parser.add_argument("--opts", type=str, default="")
-    parser.add_argument("--groups", type=int, default=1)
+    parser.add_argument("--groups", type=int, default=2)
 
     args = parser.parse_args()
 
