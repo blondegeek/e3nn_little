@@ -29,7 +29,7 @@ qm9_target_dict = {
 
 
 class Network(torch.nn.Module):
-    def __init__(self, muls=(50, 10, 0), lmax=1,
+    def __init__(self, muls=(50, 10, 0), ps=(1, -1), lmax=1,
                  num_layers=2, cutoff=10.0, rad_gaussians=40,
                  rad_hs=(300, 300, 300, 300, 50), num_neighbors=20, groups=2,
                  readout='add', dipole=False, mean=None, std=None, scale=None,
@@ -47,7 +47,7 @@ class Network(torch.nn.Module):
         self.options = options
 
         self.embedding = Embedding(100, muls[0])
-        Rs = [(muls[0], 0, 1)]
+        self.Rs_in = [(muls[0], 0, 1)]
 
         RadialModel = partial(
             GaussianRadialModel,
@@ -58,9 +58,10 @@ class Network(torch.nn.Module):
         )
         self.Rs_sh = [(1, l, (-1)**l) for l in range(lmax + 1)]  # spherical harmonics representation
 
+        Rs = self.Rs_in
         modules = []
         for _ in range(num_layers):
-            act = make_gated_block(Rs, muls, self.Rs_sh)
+            act = make_gated_block(Rs, muls, ps, self.Rs_sh)
             conv = Conv(Rs, act.Rs_in, self.Rs_sh, RadialModel, groups)
             shortcut = Linear(Rs, act.Rs_out) if 'res' in self.options else None
 
@@ -70,8 +71,8 @@ class Network(torch.nn.Module):
 
         self.layers = torch.nn.ModuleList(modules)
 
-        Rs_out = [(1, 0, 1), (1, 0, -1)]
-        self.layers.append(Conv(Rs, Rs_out, self.Rs_sh, RadialModel))
+        self.Rs_out = [(1, 0, p) for p in ps]
+        self.layers.append(Conv(Rs, self.Rs_out, self.Rs_sh, RadialModel))
 
         self.register_buffer('initial_atomref', atomref)
         self.atomref = None
@@ -105,10 +106,14 @@ class Network(torch.nn.Module):
         with torch.autograd.profiler.record_function("Layer"):
             h = self.layers[-1](h, edge_index, edge_vec, sh)
 
-        # even + odd^2 = even
-        assert h.shape[1] == 2
-        h = h[:, 0] + h[:, 1].pow(2).mul(0.5)
-        h = h.view(-1, 1)
+        s = 0
+        for i, (mul, l, p) in enumerate(self.Rs_out):
+            assert mul == 1 and l == 0
+            if p == 1:
+                s += h[:, i]
+            if p == -1:
+                s += h[:, i].pow(2).mul(0.5)  # odd^2 = even
+        h = s.view(-1, 1)
 
         if self.mean is not None and self.std is not None:
             h = h * self.std + self.mean
@@ -124,7 +129,7 @@ class Network(torch.nn.Module):
         return out
 
 
-def make_gated_block(Rs_in, muls, Rs_sh):
+def make_gated_block(Rs_in, muls, ps, Rs_sh):
     """
     Make a `GatedBlockParity` assuming many things
     """
@@ -135,10 +140,10 @@ def make_gated_block(Rs_in, muls, Rs_sh):
         for l in range(abs(l_in - l_sh), l_in + l_sh + 1)
     ]
 
-    scalars = [(mul, l, p) for mul, l, p in [(muls[0], 0, +1), (muls[0], 0, -1)] if (l, p) in Rs_available]
+    scalars = [(muls[0], 0, p) for p in ps if (0, p) in Rs_available]
     act_scalars = [(mul, swish if p == 1 else torch.tanh) for mul, l, p in scalars]
 
-    nonscalars = [(muls[l], l, p) for l in range(1, len(muls)) for p in [+1, -1] if (l, p) in Rs_available]
+    nonscalars = [(muls[l], l, p*(-1)**l) for l in range(1, len(muls)) for p in ps if (l, p*(-1)**l) in Rs_available]
     if (0, +1) in Rs_available:
         gates = [(o3.mul_dim(nonscalars), 0, +1)]
         act_gates = [(-1, torch.sigmoid)]
