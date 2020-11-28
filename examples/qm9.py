@@ -27,9 +27,15 @@ def execute(args):
     train_dataset, val_dataset, _test_dataset = datasets
 
     model = Network(
-        muls=(args.mul0, args.mul1, args.mul2), lmax=args.lmax, num_layers=args.num_layers, rad_gaussians=args.rad_gaussians,
-        rad_hs=(args.rad_h,) * args.rad_layers + (args.rad_bottleneck,), groups=args.groups,
-        mean=0, std=1, atomref=dataset.atomref(target),
+        muls=(args.mul0, args.mul1, args.mul2),
+        ps=(1,) if 'shp' in args.opts else (1, -1),
+        lmax=args.lmax,
+        num_layers=args.num_layers,
+        rad_gaussians=args.rad_gaussians,
+        rad_hs=(args.rad_h,) * args.rad_layers + (args.rad_bottleneck,),
+        groups=args.groups,
+        mean=0, std=1,
+        atomref=dataset.atomref(target),
         options=args.opts
     )
     model = model.to(device)
