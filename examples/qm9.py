@@ -156,7 +156,7 @@ def main():
     parser.add_argument("--rad_layers", type=int, default=3)
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--bs", type=int, default=128)
-    parser.add_argument("--arch", type=str, default="")
+    parser.add_argument("--opts", type=str, default="")
     parser.add_argument("--groups", type=int, default=2)
     parser.add_argument("--target", type=int, default=7)
 
