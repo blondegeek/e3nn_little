@@ -19,11 +19,10 @@ def execute(args):
     dataset = QM9(path)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    target = 7
     # Report meV instead of eV.
-    units = 1000 if target in [2, 3, 4, 6, 7, 8, 9, 10] else 1
+    units = 1000 if args.target in [2, 3, 4, 6, 7, 8, 9, 10] else 1
 
-    _, datasets = SchNet.from_qm9_pretrained(path, dataset, target)
+    _, datasets = SchNet.from_qm9_pretrained(path, dataset, args.target)
     train_dataset, val_dataset, _test_dataset = datasets
 
     model = Network(
@@ -35,7 +34,7 @@ def execute(args):
         rad_hs=(args.rad_h,) * args.rad_layers + (args.rad_bottleneck,),
         groups=args.groups,
         mean=0, std=1,
-        atomref=dataset.atomref(target),
+        atomref=dataset.atomref(args.target),
         options=args.opts
     )
     model = model.to(device)
@@ -46,7 +45,7 @@ def execute(args):
         with torch.autograd.profiler.profile(use_cuda=True, record_shapes=True) as prof:
             data = data.to(device)
             pred = model(data.z, data.pos, data.batch)
-            mse = (pred.view(-1) - data.y[:, target]).pow(2)
+            mse = (pred.view(-1) - data.y[:, args.target]).pow(2)
             mse.mean().backward()
         if step == 5:
             break
@@ -68,10 +67,10 @@ def execute(args):
 
             pred = model(data.z, data.pos, data.batch)
             optim.zero_grad()
-            (pred.view(-1) - data.y[:, target]).pow(2).mean().backward()
+            (pred.view(-1) - data.y[:, args.target]).pow(2).mean().backward()
             optim.step()
 
-            err = pred.view(-1) - data.y[:, target]
+            err = pred.view(-1) - data.y[:, args.target]
             errs += [err.cpu().detach()]
 
             if time.perf_counter() - wall_print > 15:
@@ -97,7 +96,7 @@ def execute(args):
             with torch.no_grad():
                 pred = model(data.z, data.pos, data.batch)
 
-            err = pred.view(-1) - data.y[:, target]
+            err = pred.view(-1) - data.y[:, args.target]
             errs += [err.cpu().detach()]
         val_err = torch.cat(errs)
 
@@ -127,7 +126,7 @@ def execute(args):
             'lr': optim.param_groups[0]["lr"],
         }]
 
-        print(f'[{epoch}] Target: {target:02d}, MAE TRAIN: {units * train_err.abs().mean():.5f} ± {units * train_err.abs().std():.5f}, MAE VAL: {units * val_err.abs().mean():.5f} ± {units * val_err.abs().std():.5f}', flush=True)
+        print(f'[{epoch}] Target: {args.target:02d}, MAE TRAIN: {units * train_err.abs().mean():.5f} ± {units * train_err.abs().std():.5f}, MAE VAL: {units * val_err.abs().mean():.5f} ± {units * val_err.abs().std():.5f}', flush=True)
 
         scheduler.step(val_err.pow(2).mean())
 
@@ -157,8 +156,9 @@ def main():
     parser.add_argument("--rad_layers", type=int, default=3)
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--bs", type=int, default=128)
-    parser.add_argument("--opts", type=str, default="")
+    parser.add_argument("--arch", type=str, default="")
     parser.add_argument("--groups", type=int, default=2)
+    parser.add_argument("--target", type=int, default=7)
 
     args = parser.parse_args()
 
