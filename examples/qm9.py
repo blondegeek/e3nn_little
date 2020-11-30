@@ -33,7 +33,7 @@ def execute(args):
         rad_gaussians=args.rad_gaussians,
         rad_hs=(args.rad_h,) * args.rad_layers + (args.rad_bottleneck,),
         groups=args.groups,
-        mean=0, std=1,
+        mean=args.mean, std=args.std,
         atomref=dataset.atomref(args.target),
         options=args.opts
     )
@@ -159,6 +159,8 @@ def main():
     parser.add_argument("--opts", type=str, default="")
     parser.add_argument("--groups", type=int, default=2)
     parser.add_argument("--target", type=int, default=7)
+    parser.add_argument("--mean", type=float, default=0)
+    parser.add_argument("--std", type=float, default=1)
 
     args = parser.parse_args()
 
