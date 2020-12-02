@@ -141,7 +141,7 @@ def make_gated_block(Rs_in, muls, ps, Rs_sh):
     ]
 
     scalars = [(muls[0], 0, p) for p in ps if (0, p) in Rs_available]
-    act_scalars = [(mul, swish if p == 1 else torch.tanh) for mul, l, p in scalars]
+    act_scalars = [(mul, swish if p == 1 else torch.abs) for mul, l, p in scalars]
 
     nonscalars = [(muls[l], l, p*(-1)**l) for l in range(1, len(muls)) for p in ps if (l, p*(-1)**l) in Rs_available]
     if (0, +1) in Rs_available:
