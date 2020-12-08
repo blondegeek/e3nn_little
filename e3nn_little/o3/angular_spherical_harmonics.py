@@ -10,67 +10,19 @@ from e3nn_little.util import eval_code
 from e3nn_little import o3
 
 
-
-def spherical_harmonics(Rs, pos, normalization='none'):
-    """
-    spherical harmonics
-
-    :param Rs: list of L's
-    :param pos: tensor of shape [..., 3]
-    :return: tensor of shape [..., m]
-    """
-    with torch.autograd.profiler.record_function(f'spherical_harmonics({o3.format_Rs(Rs)}, {tuple(pos.shape[:-1])})'):
-        Rs = o3.simplify(Rs)
-        *size, _ = pos.shape
-        pos = pos.reshape(-1, 3)
-        d = torch.norm(pos, 2, dim=1)
-        pos = pos[d > 0]
-        pos = pos / d[d > 0, None]
-
-        # if z > x, rotate x-axis with z-axis
-        s = pos[:, 2].abs() > pos[:, 0].abs()
-        pos[s] = pos[s] @ pos.new_tensor([[0, 0, 1], [0, 1, 0], [-1, 0, 0]])
-
-        alpha = torch.atan2(pos[:, 1], pos[:, 0])
-        z = pos[:, 2]
-        y = pos[:, :2].norm(dim=1)
-
-        sh = _spherical_harmonics_alpha_z_y(Rs, alpha, z, y)
-
-        # rotate back
-        sh[s] = sh[s] @ _rep_zx(tuple(Rs), pos.dtype, pos.device)
-
-        if len(d) > len(sh):
-            out = sh.new_zeros(len(d), sh.shape[1])
-            out[d == 0] = math.sqrt(1 / (4 * math.pi)) * torch.cat([sh.new_ones(1) if l == 0 else sh.new_zeros(2 * l + 1) for mul, l, p in Rs for _ in range(mul)])
-            out[d > 0] = sh
-            sh = out
-
-        if normalization == 'component':
-            sh.mul_(math.sqrt(4 * math.pi))
-        if normalization == 'norm':
-            sh.mul_(torch.cat([math.sqrt(4 * math.pi / (2 * l + 1)) * sh.new_ones(2 * l + 1) for mul, l, p in Rs for _ in range(mul)]))
-        return sh.reshape(*size, sh.shape[1])
-
-
-@lru_cache()
-def _rep_zx(Rs, dtype, device):
-    return o3.rep(Rs, 0, -math.pi / 2, 0).to(device=device, dtype=dtype)
-
-
-def _spherical_harmonics_alpha_z_y(Rs, alpha, z, y):
+def spherical_harmonics_alpha_z_y(Rs, alpha, z, y):
     """
     spherical harmonics
     """
     Rs = o3.simplify(Rs)
-    sha = _spherical_harmonics_alpha(o3.lmax(Rs), alpha.flatten())  # [z, m]
-    shz = _spherical_harmonics_z(Rs, z.flatten(), y.flatten())  # [z, l * m]
+    sha = spherical_harmonics_alpha(o3.lmax(Rs), alpha.flatten())  # [z, m]
+    shz = spherical_harmonics_z(Rs, z.flatten(), y.flatten())  # [z, l * m]
     out = mul_m_lm(Rs, sha, shz)
     return out.reshape(alpha.shape + (shz.shape[1],))
 
 
 @torch.jit.script
-def _spherical_harmonics_alpha(l: int, alpha: torch.Tensor) -> torch.Tensor:  # pragma: no cover
+def spherical_harmonics_alpha(l: int, alpha: torch.Tensor) -> torch.Tensor:  # pragma: no cover
     """
     the alpha (x, y) component of the spherical harmonics
     (useful to perform fourier transform)
@@ -95,7 +47,7 @@ def _spherical_harmonics_alpha(l: int, alpha: torch.Tensor) -> torch.Tensor:  # 
     return out  # [..., m]
 
 
-def _spherical_harmonics_z(Rs, z, y=None):
+def spherical_harmonics_z(Rs, z, y=None):
     """
     the z component of the spherical harmonics
     (useful to perform fourier transform)
