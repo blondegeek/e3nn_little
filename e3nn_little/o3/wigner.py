@@ -3,7 +3,7 @@ import os
 
 import torch
 from e3nn_little import o3
-from e3nn_little.util import direct_sum
+from e3nn_little.math import direct_sum
 
 _Jd, _W3j = torch.load(os.path.join(os.path.dirname(__file__), 'constants.pt'))
 

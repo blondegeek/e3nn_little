@@ -253,15 +253,17 @@ def y11(x, y, z):
 _ys = [y0, y1, y2, y3, y4, y5, y6, y7, y8, y9, y10, y11]
 
 
-def spherical_harmonics(Rs, pos, normalization='intergral'):
+def spherical_harmonics(Rs, pos, normalization='integral'):
     """
     spherical harmonics
 
     :param Rs: list of L's
     :param pos: tensor of shape [..., 3]
-    :param normalization: intergral (the integral over the sphere gives 1), norm (the norm is 1), component (each component is ~1)
+    :param normalization: integral (the integral over the sphere gives 1), norm (the norm is 1), component (each component is ~1)
     :return: tensor of shape [..., m]
     """
+    assert normalization in ['integral', 'component', 'norm']
+
     with torch.autograd.profiler.record_function(f'spherical_harmonics({o3.format_Rs(Rs)}, {tuple(pos.shape[:-1])})'):
         Rs = o3.simplify(Rs)
         *size, _ = pos.shape
@@ -279,7 +281,7 @@ def spherical_harmonics(Rs, pos, normalization='intergral'):
             out[d > 0] = sh
             sh = out
 
-        if normalization == 'intergral':
+        if normalization == 'integral':
             sh.div_(math.sqrt(4 * math.pi))
         if normalization == 'norm':
             sh.div_(torch.cat([u for mul, l, p in Rs for u in mul * [math.sqrt(2 * l + 1) * sh.new_ones(2 * l + 1)]]))

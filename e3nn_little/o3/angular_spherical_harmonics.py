@@ -10,6 +10,13 @@ from e3nn_little.util import eval_code
 from e3nn_little import o3
 
 
+def spherical_harmonics_alpha_beta(Rs, alpha, beta):
+    """
+    spherical harmonics
+    """
+    return spherical_harmonics_alpha_z_y(Rs, alpha, beta.cos(), beta.sin())
+
+
 def spherical_harmonics_alpha_z_y(Rs, alpha, z, y):
     """
     spherical harmonics
