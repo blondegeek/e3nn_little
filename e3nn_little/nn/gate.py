@@ -2,7 +2,7 @@
 import torch
 
 from e3nn_little import nn, o3
-from e3nn_little.util import normalize2mom
+from e3nn_little.math import normalize2mom
 
 
 class Activation(torch.nn.Module):
