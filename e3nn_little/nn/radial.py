@@ -4,40 +4,6 @@ import torch
 from e3nn_little.util import normalize2mom
 
 
-class ConstantRadialModel(torch.nn.Module):
-    def __init__(self, d):
-        super().__init__()
-        self.weight = torch.nn.Parameter(torch.randn(d))
-
-    def forward(self, _radii):
-        batch = _radii.size(0)
-        return self.weight.reshape(1, -1).expand(batch, -1)
-
-
-class FiniteElementModel(torch.nn.Module):
-    def __init__(self, out_dim, position, basis, Model):
-        '''
-        :param out_dim: output dimension
-        :param position: tensor [i, ...]
-        :param basis: scalar function: tensor [a, ...] -> [a]
-        :param Model: Class(d1, d2), trainable model: R^d1 -> R^d2
-        '''
-        super().__init__()
-        self.register_buffer('position', position)
-        self.basis = basis
-        self.f = Model(len(position), out_dim)
-
-    def forward(self, x):
-        """
-        :param x: tensor [batch, ...]
-        :return: tensor [batch, dim]
-        """
-        diff = x.unsqueeze(1) - self.position.unsqueeze(0)  # [batch, i, ...]
-        batch, n, *rest = diff.size()
-        x = self.basis(diff.reshape(-1, *rest)).reshape(batch, n)  # [batch, i]
-        return self.f(x)
-
-
 class FC(torch.nn.Module):
     def __init__(self, hs, act):
         super().__init__()
@@ -101,24 +67,26 @@ class FCrelu(torch.nn.Module):
             return x
 
 
-def FiniteElementFCModel(out_dim, position, basis, Model):
-    return FiniteElementModel(out_dim, position, basis, Model)
+class GaussianRadialModel(torch.nn.Module):
+    def __init__(self, number_of_basis, max_radius, min_radius=0.):
+        '''
+        :param out_dim: output dimension
+        :param position: tensor [i, ...]
+        :param basis: scalar function: tensor [a, ...] -> [a]
+        :param Model: Class(d1, d2), trainable model: R^d1 -> R^d2
+        '''
+        super().__init__()
+        spacing = (max_radius - min_radius) / (number_of_basis - 1)
+        radii = torch.linspace(min_radius, max_radius, number_of_basis)
+        self.sigma = 0.8 * spacing
 
+        self.register_buffer('radii', radii)
 
-def GaussianRadialModel(out_dim, max_radius, number_of_basis, hs, act=None, min_radius=0.):
-    """exp(-x^2 /spacing)"""
-    spacing = (max_radius - min_radius) / (number_of_basis - 1)
-    radii = torch.linspace(min_radius, max_radius, number_of_basis)
-    sigma = 0.8 * spacing
-
-    def basis(x):
-        return x.div(sigma).pow(2).neg().exp().div(1.423085244900308)
-
-    if act is not None:
-        def Model(d_in, d_out):
-            return FC((d_in,) + hs + (d_out,), act)
-    else:
-        def Model(d_in, d_out):
-            return FCrelu((d_in,) + hs + (d_out,))
-
-    return FiniteElementFCModel(out_dim, radii, basis, Model)
+    def forward(self, x):
+        """
+        :param x: tensor [batch]
+        :return: tensor [batch, dim]
+        """
+        x = x[:, None] - self.radii[None, :]  # [batch, i]
+        x = x.div(self.sigma).pow(2).neg().exp().div(1.423085244900308)
+        return x  # [batch, i]

@@ -1,5 +1,5 @@
 # pylint: disable=not-callable, no-member, invalid-name, line-too-long, wildcard-import, unused-wildcard-import, missing-docstring, bare-except, abstract-method, arguments-differ
-from functools import partial
+from math import pi
 
 import torch
 from torch.nn import Embedding
@@ -7,8 +7,8 @@ from torch_geometric.nn import MessagePassing, radius_graph
 from torch_scatter import scatter
 
 from e3nn_little import o3
-from e3nn_little.nn import (GatedBlockParity, GaussianRadialModel,
-                            GroupedWeightedTensorProduct, Linear)
+from e3nn_little.nn import (FC, CustomWeightedTensorProduct, GatedBlockParity,
+                            GaussianRadialModel, Identity, Linear)
 from e3nn_little.util import swish
 
 
@@ -29,11 +29,11 @@ qm9_target_dict = {
 
 
 class Network(torch.nn.Module):
-    def __init__(self, muls=(50, 10, 0), ps=(1, -1), lmax=1,
-                 num_layers=2, cutoff=10.0, rad_gaussians=40,
-                 rad_hs=(300, 300, 300, 300, 50), num_neighbors=20, groups=2,
+    def __init__(self, muls=(128, 8, 0), ps=(1, -1), lmax=1,
+                 num_layers=6, cutoff=10.0, rad_gaussians=50,
+                 rad_hs=(128,), num_neighbors=20,
                  readout='add', dipole=False, mean=None, std=None, scale=None,
-                 atomref=None, options=""):
+                 atomref=None, options="res"):
         super().__init__()
 
         assert readout in ['add', 'sum', 'mean']
@@ -49,21 +49,21 @@ class Network(torch.nn.Module):
         self.embedding = Embedding(100, muls[0])
         self.Rs_in = [(muls[0], 0, 1)]
 
-        RadialModel = partial(
-            GaussianRadialModel,
-            max_radius=cutoff,
-            number_of_basis=rad_gaussians,
-            hs=rad_hs,
-            act=None if 'relu' in options else swish
-        )
+        self.radial = GaussianRadialModel(rad_gaussians, cutoff)
         self.Rs_sh = [(1, l, (-1)**l) for l in range(lmax + 1)]  # spherical harmonics representation
 
         Rs = self.Rs_in
         modules = []
         for _ in range(num_layers):
             act = make_gated_block(Rs, muls, ps, self.Rs_sh)
-            conv = Conv(Rs, act.Rs_in, self.Rs_sh, RadialModel, groups)
-            shortcut = Linear(Rs, act.Rs_out) if 'res' in self.options else None
+            conv = Conv(Rs, act.Rs_in, self.Rs_sh, (rad_gaussians,) + rad_hs)
+            if 'res' in self.options:
+                if Rs == act.Rs_out:
+                    shortcut = Identity(Rs, act.Rs_out)
+                else:
+                    shortcut = Linear(Rs, act.Rs_out)
+            else:
+                shortcut = None
 
             Rs = o3.simplify(act.Rs_out)
 
@@ -72,7 +72,7 @@ class Network(torch.nn.Module):
         self.layers = torch.nn.ModuleList(modules)
 
         self.Rs_out = [(1, 0, p) for p in ps]
-        self.layers.append(Conv(Rs, self.Rs_out, self.Rs_sh, RadialModel))
+        self.layers.append(Conv(Rs, self.Rs_out, self.Rs_sh, (rad_gaussians,) + rad_hs))
 
         self.register_buffer('initial_atomref', atomref)
         self.atomref = None
@@ -89,14 +89,17 @@ class Network(torch.nn.Module):
         edge_index = radius_graph(pos, r=self.cutoff, batch=batch, max_num_neighbors=1000)
         row, col = edge_index
         edge_vec = pos[row] - pos[col]
-        sh = o3.spherical_harmonics(self.Rs_sh, edge_vec, 'component') / self.num_neighbors**0.5
+        edge_sh = o3.spherical_harmonics(self.Rs_sh, edge_vec, 'component') / self.num_neighbors**0.5
+        edge_len = edge_vec.norm(dim=1)
+        edge_weight = self.radial(edge_len)
+        edge_c = (pi * edge_len / self.cutoff).cos().add(1).div(2)
 
         for conv, act, shortcut in self.layers[:-1]:
             with torch.autograd.profiler.record_function("Layer"):
                 if shortcut:
                     s = shortcut(h)
 
-                h = conv(h, edge_index, edge_vec, sh)  # convolution
+                h = conv(h, edge_index, edge_weight, edge_c, edge_sh)  # convolution
                 h = act(h)  # gate non linearity
 
                 if shortcut:
@@ -104,7 +107,7 @@ class Network(torch.nn.Module):
                     h = 0.5**0.5 * s + (1 + (0.5**0.5 - 1) * m) * h
 
         with torch.autograd.profiler.record_function("Layer"):
-            h = self.layers[-1](h, edge_index, edge_vec, sh)
+            h = self.layers[-1](h, edge_index, edge_weight, edge_c, edge_sh)
 
         s = 0
         for i, (mul, l, p) in enumerate(self.Rs_out):
@@ -141,7 +144,7 @@ def make_gated_block(Rs_in, muls, ps, Rs_sh):
     ]
 
     scalars = [(muls[0], 0, p) for p in ps if (0, p) in Rs_available]
-    act_scalars = [(mul, swish if p == 1 else torch.abs) for mul, l, p in scalars]
+    act_scalars = [(mul, swish if p == 1 else torch.tanh) for mul, l, p in scalars]
 
     nonscalars = [(muls[l], l, p*(-1)**l) for l in range(1, len(muls)) for p in ps if (l, p*(-1)**l) in Rs_available]
     if (0, +1) in Rs_available:
@@ -155,25 +158,46 @@ def make_gated_block(Rs_in, muls, ps, Rs_sh):
 
 
 class Conv(MessagePassing):
-    def __init__(self, Rs_in, Rs_out, Rs_sh, RadialModel, groups=1, normalization='component'):
+    def __init__(self, Rs_in, Rs_out, Rs_sh, rad_hs, normalization='component'):
         super().__init__(aggr='add')
         self.Rs_in = o3.simplify(Rs_in)
         self.Rs_out = o3.simplify(Rs_out)
         self.Rs_sh = o3.simplify(Rs_sh)
 
         self.si = Linear(self.Rs_in, self.Rs_out)
-        self.tp = GroupedWeightedTensorProduct(self.Rs_in, self.Rs_sh, self.Rs_out, groups, normalization=normalization, own_weight=False, weight_batch=True)
-        self.rm = RadialModel(self.tp.nweight)
+        self.lin1 = Linear(self.Rs_in, self.Rs_in)
+
+        instr = []
+        Rs = []
+        for i_1, (mul_1, l_1, p_1) in enumerate(self.Rs_in):
+            for i_2, (_, l_2, p_2) in enumerate(self.Rs_sh):
+                for l_out in range(abs(l_1 - l_2), l_1 + l_2 + 1):
+                    p_out = p_1 * p_2
+                    if (l_out, p_out) in [(l, p) for _, l, p in self.Rs_out]:
+                        r = (mul_1, l_out, p_out)
+                        if r in Rs:
+                            i_out = Rs.index(r)
+                        else:
+                            i_out = len(Rs)
+                            Rs.append(r)
+                        instr += [(i_1, i_2, i_out, 'uvu', True)]
+        self.tp = CustomWeightedTensorProduct(self.Rs_in, self.Rs_sh, Rs, instr, own_weight=False, weight_batch=True)
+        self.nn = FC(rad_hs + (self.tp.nweight,), swish)
+        self.lin2 = Linear(Rs, self.Rs_out)
 
         self.normalization = normalization
 
-    def forward(self, x, edge_index, edge_vec, sh, size=None):
+    def forward(self, x, edge_index, edge_weight, edge_c, edge_sh, size=None):
         with torch.autograd.profiler.record_function("Conv"):
             # x = [num_atoms, dim(Rs_in)]
             s = self.si(x)
 
-            w = self.rm(edge_vec.norm(dim=1))  # [num_messages, nweight]
-            x = self.propagate(edge_index, size=size, x=x, sh=sh, w=w)
+            w = self.nn(edge_weight)  # [num_messages, nweight]
+            w = w * edge_c[:, None]
+
+            x = self.lin1(x)
+            x = self.propagate(edge_index, size=size, x=x, sh=edge_sh, w=w)
+            x = self.lin2(x)
 
             m = self.si.output_mask
             return 0.5**0.5 * s + (1 + (0.5**0.5 - 1) * m) * x

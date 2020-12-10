@@ -32,7 +32,6 @@ def execute(args):
         num_layers=args.num_layers,
         rad_gaussians=args.rad_gaussians,
         rad_hs=(args.rad_h,) * args.rad_layers + (args.rad_bottleneck,),
-        groups=args.groups,
         mean=args.mean, std=args.std,
         atomref=dataset.atomref(args.target),
         options=args.opts
@@ -146,18 +145,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=str, required=True)
     parser.add_argument("--mul0", type=int, default=64)
-    parser.add_argument("--mul1", type=int, default=16)
+    parser.add_argument("--mul1", type=int, default=8)
     parser.add_argument("--mul2", type=int, default=0)
     parser.add_argument("--lmax", type=int, default=1)
-    parser.add_argument("--num_layers", type=int, default=2)
-    parser.add_argument("--rad_gaussians", type=int, default=40)
-    parser.add_argument("--rad_h", type=int, default=400)
-    parser.add_argument("--rad_bottleneck", type=int, default=50)
-    parser.add_argument("--rad_layers", type=int, default=3)
+    parser.add_argument("--num_layers", type=int, default=6)
+    parser.add_argument("--rad_gaussians", type=int, default=50)
+    parser.add_argument("--rad_h", type=int, default=128)
+    parser.add_argument("--rad_bottleneck", type=int, default=128)
+    parser.add_argument("--rad_layers", type=int, default=0)
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--bs", type=int, default=128)
-    parser.add_argument("--opts", type=str, default="")
-    parser.add_argument("--groups", type=int, default=2)
+    parser.add_argument("--opts", type=str, default="res")
     parser.add_argument("--target", type=int, default=7)
     parser.add_argument("--mean", type=float, default=0)
     parser.add_argument("--std", type=float, default=1)

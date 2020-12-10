@@ -77,6 +77,32 @@ def ElementwiseTensorProduct(Rs_in1, Rs_in2, normalization='component'):
     return CustomWeightedTensorProduct(Rs_in1, Rs_in2, Rs_out, instr, normalization, own_weight=False)
 
 
+class Identity(torch.nn.Module):
+    def __init__(self, Rs_in, Rs_out):
+        super().__init__()
+
+        self.Rs_in = o3.simplify(Rs_in)
+        self.Rs_out = o3.simplify(Rs_out)
+
+        assert self.Rs_in == self.Rs_out
+
+        output_mask = torch.cat([
+            torch.ones(mul * (2 * l + 1))
+            for mul, l, p in self.Rs_out
+        ])
+        self.register_buffer('output_mask', output_mask)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({o3.format_Rs(self.Rs_in)} -> {o3.format_Rs(self.Rs_out)})"
+
+    def forward(self, features):
+        """
+        :param features: [..., dim(Rs_in)]
+        :return: [..., dim(Rs_out)]
+        """
+        return features
+
+
 class Linear(torch.nn.Module):
     def __init__(self, Rs_in, Rs_out, normalization: str = 'component'):
         super().__init__()
